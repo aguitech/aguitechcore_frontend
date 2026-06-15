@@ -4,6 +4,10 @@ import dotenv from 'dotenv';
 import { connectDB } from './config/db.js';
 import authRoutes from './routes/auth.routes.js';
 import dashboardRoutes from './routes/dashboard.routes.js';
+import clientRoutes from './routes/client.routes.js';
+import taskRoutes from './routes/task.routes.js';
+import calendarRoutes from './routes/calendar.routes.js';
+import profileRoutes from './routes/profile.routes.js';
 import { errorHandler } from './middleware/error.js';
 
 dotenv.config();
@@ -18,6 +22,10 @@ app.get('/api/health', (_req, res) => res.json({ ok: true, service: 'aguittech-c
 
 app.use('/api/auth', authRoutes);
 app.use('/api/dashboard', dashboardRoutes);
+app.use('/api/clients', clientRoutes);
+app.use('/api/tasks', taskRoutes);
+app.use('/api/calendar', calendarRoutes);
+app.use('/api/profile', profileRoutes);
 
 app.use(errorHandler);
 

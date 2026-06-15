@@ -1,11 +1,10 @@
 import { useEffect, useState } from 'react';
-import { useAuth } from '../context/AuthContext.jsx';
+import Layout from '../components/Layout.jsx';
 import api from '../services/api.js';
 
 const STATUS_COLORS = { activo: '#22c55e', pausado: '#f59e0b', completado: '#6366f1' };
 
 export default function Dashboard() {
-  const { user, logout } = useAuth();
   const [stats, setStats] = useState({ total: 0, activos: 0, completados: 0, promedio: 0 });
   const [projects, setProjects] = useState([]);
 
@@ -15,12 +14,11 @@ export default function Dashboard() {
   }, []);
 
   return (
-    <div className="dash">
-      <header className="topbar">
-        <h2>📊 Dashboard</h2>
-        <div className="user">
-          <span>{user?.name} <small className="badge">{user?.role}</small></span>
-          <button onClick={logout} className="ghost">Salir</button>
+    <Layout>
+      <header className="page-head">
+        <div>
+          <h1>Dashboard</h1>
+          <p className="muted">Resumen general de tus proyectos y KPIs</p>
         </div>
       </header>
 
@@ -32,9 +30,9 @@ export default function Dashboard() {
       </div>
 
       <div className="card">
-        <h3>Proyectos</h3>
+        <h3>Proyectos recientes</h3>
         {projects.length === 0 ? (
-          <p className="muted">Sin proyectos aún. Corre <code>npm run seed</code> en <code>server/</code>.</p>
+          <p className="muted">Sin proyectos aún.</p>
         ) : (
           <table className="tbl">
             <thead>
@@ -56,7 +54,7 @@ export default function Dashboard() {
           </table>
         )}
       </div>
-    </div>
+    </Layout>
   );
 }
 
