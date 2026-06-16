@@ -15,12 +15,22 @@ function buildProjectPayload(body) {
   return payload;
 }
 
-export async function getStats(_req, res, next) {
+export async function getStats(req, res, next) {
   try {
-    const total = await Project.countDocuments();
-    const activos = await Project.countDocuments({ status: 'activo' });
-    const completados = await Project.countDocuments({ status: 'completado' });
-    const promedio = await Project.aggregate([{ $group: { _id: null, avg: { $avg: '$progress' } } }]);
+    // Stats de proyectos donde el user es owner o miembro
+    const userFilter = {
+      $or: [
+        { owner: req.user._id },
+        { 'members.user': req.user._id },
+      ],
+    };
+    const total = await Project.countDocuments(userFilter);
+    const activos = await Project.countDocuments({ ...userFilter, status: 'activo' });
+    const completados = await Project.countDocuments({ ...userFilter, status: 'completado' });
+    const promedio = await Project.aggregate([
+      { $match: userFilter },
+      { $group: { _id: null, avg: { $avg: '$progress' } } },
+    ]);
     res.json({
       total,
       activos,
@@ -32,7 +42,13 @@ export async function getStats(_req, res, next) {
 
 export async function listProjects(req, res, next) {
   try {
-    const projects = await Project.find({ owner: req.user._id })
+    // Show projects where user is owner OR member
+    const projects = await Project.find({
+      $or: [
+        { owner: req.user._id },
+        { 'members.user': req.user._id },
+      ],
+    })
       .populate('client', 'name company email status')
       .populate('members.user', 'name email role')
       .sort({ createdAt: -1 });
@@ -42,7 +58,14 @@ export async function listProjects(req, res, next) {
 
 export async function getProject(req, res, next) {
   try {
-    const project = await Project.findOne({ _id: req.params.id, owner: req.user._id })
+    // Show project if user is owner OR member
+    const project = await Project.findOne({
+      _id: req.params.id,
+      $or: [
+        { owner: req.user._id },
+        { 'members.user': req.user._id },
+      ],
+    })
       .populate('client', 'name company email status')
       .populate('members.user', 'name email role');
     if (!project) return res.status(404).json({ message: 'Proyecto no encontrado' });
