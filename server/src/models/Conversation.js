@@ -15,7 +15,7 @@ const conversationSchema = new mongoose.Schema(
   {
     // For 1-on-1 chats we store a deterministic pair id for fast lookup
     // (sorted concatenation of the two user ids)
-    pairKey: { type: String, index: true, sparse: true },
+    pairKey: { type: String },
     // Type of conversation: 'direct' (1-on-1) or 'group' (future)
     type: { type: String, enum: ['direct', 'group'], default: 'direct' },
     // For groups
@@ -35,5 +35,8 @@ conversationSchema.index({ pairKey: 1 }, { unique: true, partialFilterExpression
 
 // Lookup conversations for a user, ordered by most recent activity
 conversationSchema.index({ 'participants.user': 1, lastMessageAt: -1 });
+
+// Note: pairKey is already indexed via schema.index() above; do NOT add `index: true`
+// to the field declaration to avoid a duplicate-index warning from Mongoose.
 
 export default mongoose.model('Conversation', conversationSchema);
