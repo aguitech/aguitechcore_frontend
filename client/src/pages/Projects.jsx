@@ -1,11 +1,18 @@
 import { useEffect, useState } from 'react';
 import Layout from '../components/Layout.jsx';
 import api from '../services/api.js';
+import { useAuth } from '../context/AuthContext.jsx';
 
 const STATUS = {
   activo: { label: 'Activo', color: '#22c55e' },
   pausado: { label: 'Pausado', color: '#f59e0b' },
   completado: { label: 'Completado', color: '#3b82f6' },
+};
+
+const ROLE_COLORS = {
+  colaborador: '#3b82f6',
+  revisor: '#f59e0b',
+  observador: '#6366f1',
 };
 
 const EMPTY = {
@@ -20,6 +27,8 @@ const EMPTY = {
 };
 
 export default function Projects() {
+  const { user: currentUser } = useAuth();
+  const isAdmin = currentUser?.role === 'admin';
   const [projects, setProjects] = useState([]);
   const [clients, setClients] = useState([]);
   const [memberRoles, setMemberRoles] = useState({ roles: [], labels: {} });
@@ -271,14 +280,16 @@ export default function Projects() {
                       <span className="pill member-role" style={{ background: ROLE_COLORS[m.role] || '#666' }}>
                         {memberRoles.labels?.[m.role]?.split(' (')[0] || m.role}
                       </span>
-                      <button
-                        type="button"
-                        className="ghost small danger"
-                        onClick={() => removeMember(m.user._id)}
-                        title={`Quitar a ${m.user.name}`}
-                      >
-                        ✕ Quitar
-                      </button>
+                      {isAdmin && (
+                        <button
+                          type="button"
+                          className="ghost small danger"
+                          onClick={() => removeMember(m.user._id)}
+                          title={`Quitar a ${m.user.name}`}
+                        >
+                          ✕ Quitar
+                        </button>
+                      )}
                     </div>
                   ))}
                 </div>

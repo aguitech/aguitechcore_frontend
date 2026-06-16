@@ -34,20 +34,23 @@ export async function createUser(req, res, next) {
 export async function updateUser(req, res, next) {
   try {
     const { name, email, role, phone, active, password } = req.body;
-    const updates = {};
-    if (name !== undefined) updates.name = name;
-    if (email !== undefined) updates.email = email.toLowerCase();
+    const user = await User.findById(req.params.id);
+    if (!user) return res.status(404).json({ message: 'Usuario no encontrado' });
+    if (name !== undefined) user.name = name;
+    if (email !== undefined) user.email = email.toLowerCase();
     if (role !== undefined) {
       if (!User.ROLES.includes(role)) {
         return res.status(400).json({ message: `Rol inválido. Opciones: ${User.ROLES.join(', ')}` });
       }
-      updates.role = role;
+      user.role = role;
     }
-    if (phone !== undefined) updates.phone = phone;
-    if (active !== undefined) updates.active = active;
-    if (password) updates.password = password;
-    const user = await User.findByIdAndUpdate(req.params.id, updates, { new: true, runValidators: true });
-    if (!user) return res.status(404).json({ message: 'Usuario no encontrado' });
+    if (phone !== undefined) user.phone = phone;
+    if (active !== undefined) user.active = active;
+    if (password) {
+      if (password.length < 6) return res.status(400).json({ message: 'Mínimo 6 caracteres' });
+      user.password = password; // pre-save hook will hash it
+    }
+    await user.save();
     res.json(user);
   } catch (err) { next(err); }
 }

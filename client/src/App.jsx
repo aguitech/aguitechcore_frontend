@@ -1,5 +1,6 @@
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { useAuth } from './context/AuthContext.jsx';
+import ErrorBoundary from './components/ErrorBoundary.jsx';
 import Login from './pages/Login.jsx';
 import Dashboard from './pages/Dashboard.jsx';
 import Clients from './pages/Clients.jsx';
@@ -17,16 +18,18 @@ function PrivateRoute({ children }) {
 
 export default function App() {
   return (
-    <Routes>
-      <Route path="/login" element={<Login />} />
-      <Route path="/dashboard" element={<PrivateRoute><Dashboard /></PrivateRoute>} />
-      <Route path="/clients" element={<PrivateRoute><Clients /></PrivateRoute>} />
-      <Route path="/projects" element={<PrivateRoute><Projects /></PrivateRoute>} />
-      <Route path="/users" element={<PrivateRoute><Users /></PrivateRoute>} />
-      <Route path="/tasks" element={<PrivateRoute><Tasks /></PrivateRoute>} />
-      <Route path="/calendar" element={<PrivateRoute><Calendar /></PrivateRoute>} />
-      <Route path="/profile" element={<PrivateRoute><Profile /></PrivateRoute>} />
-      <Route path="*" element={<Navigate to="/dashboard" />} />
-    </Routes>
+    <ErrorBoundary>
+      <Routes>
+        <Route path="/login" element={<Login />} />
+        <Route path="/dashboard" element={<PrivateRoute><Dashboard /></PrivateRoute>} />
+        <Route path="/clients" element={<PrivateRoute><Clients /></PrivateRoute>} />
+        <Route path="/projects" element={<PrivateRoute><Projects /></PrivateRoute>} />
+        <Route path="/users" element={<PrivateRoute><Users /></PrivateRoute>} />
+        <Route path="/tasks" element={<PrivateRoute><Tasks /></PrivateRoute>} />
+        <Route path="/calendar" element={<PrivateRoute><Calendar /></PrivateRoute>} />
+        <Route path="/profile" element={<PrivateRoute><Profile /></PrivateRoute>} />
+        <Route path="*" element={<Navigate to="/dashboard" />} />
+      </Routes>
+    </ErrorBoundary>
   );
 }

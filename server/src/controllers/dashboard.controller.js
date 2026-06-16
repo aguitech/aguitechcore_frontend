@@ -140,9 +140,12 @@ export async function addMember(req, res, next) {
   } catch (err) { next(err); }
 }
 
-// Remove a member
+// Remove a member — only admins can do this
 export async function removeMember(req, res, next) {
   try {
+    if (req.user.role !== 'admin') {
+      return res.status(403).json({ message: 'Solo administradores pueden quitar miembros del proyecto' });
+    }
     const project = await Project.findOne({ _id: req.params.id, owner: req.user._id });
     if (!project) return res.status(404).json({ message: 'Proyecto no encontrado' });
     project.members = project.members.filter(m => m.user.toString() !== req.params.userId);
