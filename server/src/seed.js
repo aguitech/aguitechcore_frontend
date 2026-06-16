@@ -18,6 +18,20 @@ async function seed() {
     role: 'admin',
   });
 
+  // Additional users so projects can have members
+  const maria = await User.create({
+    name: 'María López',
+    email: 'maria@aguittech.com',
+    password: 'maria123',
+    role: 'manager',
+  });
+  const pedro = await User.create({
+    name: 'Pedro Ramírez',
+    email: 'pedro@aguittech.com',
+    password: 'pedro123',
+    role: 'member',
+  });
+
   const clients = await Client.insertMany([
     { name: 'Ana Reyes', company: 'Boutique Luna', email: 'ana@luna.mx', phone: '+52 55 1111 2222', status: 'activo', owner: admin._id },
     { name: 'Carlos Méndez', company: 'Méndez Bienes Raíces', email: 'carlos@mendez.mx', phone: '+52 33 4444 5555', status: 'activo', owner: admin._id },
@@ -25,12 +39,18 @@ async function seed() {
     { name: 'Roberto Núñez', company: 'Núñez Abogados', email: 'r.nunez@nunezabg.mx', phone: '+52 55 9999 0000', status: 'pausado', owner: admin._id },
   ]);
 
+  // Find clients by company for the projects
+  const luna = clients.find(c => c.company === 'Boutique Luna');
+  const mendez = clients.find(c => c.company === 'Méndez Bienes Raíces');
+  const raiz = clients.find(c => c.company === 'Café Raíz');
+  const nunez = clients.find(c => c.company === 'Núñez Abogados');
+
   const projects = await Project.insertMany([
-    { title: 'Campaña Facebook Q3', client: 'Boutique Luna', status: 'activo', progress: 65, owner: admin._id },
-    { title: 'Rediseño Web Méndez', client: 'Méndez Bienes Raíces', status: 'activo', progress: 40, owner: admin._id },
-    { title: 'Branding Café Raíz', client: 'Café Raíz', status: 'activo', progress: 80, owner: admin._id },
-    { title: 'SEO Local Núñez', client: 'Núñez Abogados', status: 'completado', progress: 100, owner: admin._id },
-    { title: 'Estrategia IG Méndez', client: 'Méndez Bienes Raíces', status: 'pausado', progress: 25, owner: admin._id },
+    { title: 'Campaña Facebook Q3', client: luna._id, status: 'activo', progress: 65, owner: admin._id, members: [{ user: maria._id, role: 'colaborador' }, { user: pedro._id, role: 'observador' }] },
+    { title: 'Rediseño Web Méndez', client: mendez._id, status: 'activo', progress: 40, owner: admin._id, members: [{ user: maria._id, role: 'revisor' }] },
+    { title: 'Branding Café Raíz', client: raiz._id, status: 'activo', progress: 80, owner: admin._id },
+    { title: 'SEO Local Núñez', client: nunez._id, status: 'completado', progress: 100, owner: admin._id },
+    { title: 'Estrategia IG Méndez', client: mendez._id, status: 'pausado', progress: 25, owner: admin._id, members: [{ user: pedro._id, role: 'colaborador' }] },
   ]);
 
   const today = new Date();
@@ -48,7 +68,7 @@ async function seed() {
   ]);
 
   console.log('🌱 Seed completo. Login: admin@aguittech.com / admin123');
-  console.log(`   ${clients.length} clientes, ${projects.length} proyectos, ${8} tareas`);
+  console.log(`   ${clients.length} clientes, ${projects.length} proyectos, 8 tareas, 3 usuarios`);
   process.exit(0);
 }
 

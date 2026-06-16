@@ -202,3 +202,10 @@ code { background: var(--bg-2); padding: 1px 6px; border-radius: 4px; font-size:
 .role-card { background: #1f2937; padding: 0.8rem; border-radius: 8px; border: 1px solid #374151; }
 .role-card .pill { display: inline-block; margin-bottom: 0.4rem; }
 .center { text-align: center; padding: 3rem 1rem; }
+
+/* === Projects v2 additions === */
+.modal-lg { max-width: 720px; width: 90vw; }
+.avatar-group { display: flex; align-items: center; }
+.avatar-group .avatar-sm { margin-left: -6px; border: 2px solid #1f2937; }
+.avatar-group .avatar-sm:first-child { margin-left: 0; }
+.avatar-more { background: #6b7280 !important; }
