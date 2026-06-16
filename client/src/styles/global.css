@@ -209,3 +209,119 @@ code { background: var(--bg-2); padding: 1px 6px; border-radius: 4px; font-size:
 .avatar-group .avatar-sm { margin-left: -6px; border: 2px solid #1f2937; }
 .avatar-group .avatar-sm:first-child { margin-left: 0; }
 .avatar-more { background: #6b7280 !important; }
+
+/* === Team modal UX === */
+.add-member-section {
+  background: #1f2937;
+  border: 1px solid #374151;
+  border-radius: 8px;
+  padding: 1.2rem;
+  margin-bottom: 1.5rem;
+}
+.section-title {
+  margin: 0 0 0.4rem 0;
+  font-size: 1rem;
+  color: #f3f4f6;
+}
+.section-help {
+  margin: 0 0 1rem 0;
+  line-height: 1.4;
+}
+.add-member-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.8rem;
+}
+.add-member-form .full-width {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+.add-member-form .label-text {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #d1d5db;
+}
+.big-input {
+  padding: 0.7rem 0.9rem !important;
+  font-size: 1rem !important;
+  background: #111827 !important;
+  border: 1px solid #4b5563 !important;
+  border-radius: 6px !important;
+  color: #fff !important;
+  width: 100%;
+  box-sizing: border-box;
+}
+.big-input:focus {
+  outline: none;
+  border-color: #FF6A00 !important;
+  box-shadow: 0 0 0 3px rgba(255, 106, 0, 0.2);
+}
+.big-btn {
+  padding: 0.8rem 1.2rem !important;
+  font-size: 1rem !important;
+  font-weight: 600 !important;
+  margin-top: 0.4rem;
+}
+.big-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.members-section {
+  margin-top: 1.5rem;
+}
+.members-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+.member-card {
+  display: flex;
+  align-items: center;
+  gap: 0.8rem;
+  background: #1f2937;
+  border: 1px solid #374151;
+  border-radius: 8px;
+  padding: 0.7rem 1rem;
+}
+.member-avatar {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  font-weight: 700;
+  font-size: 1.1rem;
+  flex-shrink: 0;
+}
+.member-info {
+  flex: 1;
+  min-width: 0;
+}
+.member-info strong {
+  display: block;
+  color: #f3f4f6;
+}
+.member-info .muted {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.member-role {
+  font-size: 0.75rem !important;
+  padding: 0.2rem 0.6rem !important;
+  white-space: nowrap;
+}
+.empty-state {
+  background: #1f2937;
+  border: 1px dashed #4b5563;
+  border-radius: 8px;
+  padding: 2rem 1rem;
+  text-align: center;
+}
+.empty-state p {
+  margin: 0.3rem 0;
+}

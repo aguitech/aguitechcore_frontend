@@ -195,56 +195,103 @@ export default function Projects() {
       {/* Modal separado para gestionar miembros del proyecto */}
       {editingProject && (
         <div className="modal-bg" onClick={() => setEditing(null)}>
-          <div className="modal" onClick={(e) => e.stopPropagation()}>
+          <div className="modal modal-lg" onClick={(e) => e.stopPropagation()}>
             <h3>👥 Equipo del proyecto</h3>
-            <p className="muted small">{editingProject.title}</p>
+            <p className="muted small" style={{ marginTop: '-0.5rem', marginBottom: '1.5rem' }}>
+              <strong>{editingProject.title}</strong>
+              {editingProject.client && <> · Cliente: <strong>{editingProject.client.name}</strong></>}
+            </p>
 
             {memberMsg.text && (
               <div className={`alert ${memberMsg.type === 'ok' ? 'ok' : ''}`}>{memberMsg.text}</div>
             )}
 
-            <div className="row" style={{ marginBottom: '1rem' }}>
-              <input
-                type="email"
-                placeholder="email@ejemplo.com"
-                value={newMemberEmail}
-                onChange={(e) => setNewMemberEmail(e.target.value)}
-                style={{ flex: 1 }}
-              />
-              <select value={newMemberRole} onChange={(e) => setNewMemberRole(e.target.value)} className="select-sm">
-                {memberRoles.roles?.map(r => (
-                  <option key={r} value={r}>{memberRoles.labels[r] || r}</option>
-                ))}
-              </select>
-              <button type="button" className="primary" onClick={addMember}>Agregar</button>
+            {/* === Sección: Agregar miembro === */}
+            <div className="add-member-section">
+              <h4 className="section-title">➕ Agregar persona al equipo</h4>
+              <p className="muted small section-help">
+                Escribe el email de un usuario registrado. El sistema lo buscará y lo agregará al equipo de este proyecto.
+              </p>
+
+              <div className="add-member-form">
+                <label className="full-width">
+                  <span className="label-text">📧 Email del usuario</span>
+                  <input
+                    type="email"
+                    className="big-input"
+                    placeholder="ejemplo@empresa.com"
+                    value={newMemberEmail}
+                    onChange={(e) => setNewMemberEmail(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addMember(); } }}
+                    autoFocus
+                  />
+                </label>
+
+                <label className="full-width">
+                  <span className="label-text">🎭 Rol en este proyecto</span>
+                  <select
+                    className="big-input"
+                    value={newMemberRole}
+                    onChange={(e) => setNewMemberRole(e.target.value)}
+                  >
+                    {memberRoles.roles?.map(r => (
+                      <option key={r} value={r}>{memberRoles.labels[r] || r}</option>
+                    ))}
+                  </select>
+                </label>
+
+                <button
+                  type="button"
+                  className="primary big-btn"
+                  onClick={addMember}
+                  disabled={!newMemberEmail}
+                >
+                  ➕ Agregar al equipo
+                </button>
+              </div>
             </div>
 
-            {editingProject.members?.length > 0 ? (
-              <table className="tbl">
-                <thead>
-                  <tr><th>Nombre</th><th>Email</th><th>Rol</th><th></th></tr>
-                </thead>
-                <tbody>
+            {/* === Sección: Miembros actuales === */}
+            <div className="members-section">
+              <h4 className="section-title">
+                👥 Miembros actuales ({editingProject.members?.length || 0})
+              </h4>
+
+              {editingProject.members?.length > 0 ? (
+                <div className="members-list">
                   {editingProject.members.map((m) => (
-                    <tr key={m.user._id}>
-                      <td><strong>{m.user.name}</strong></td>
-                      <td className="muted small">{m.user.email}</td>
-                      <td><span className="pill">{memberRoles.labels[m.role] || m.role}</span></td>
-                      <td>
-                        <button type="button" className="ghost small danger" onClick={() => removeMember(m.user._id)}>
-                          Quitar
-                        </button>
-                      </td>
-                    </tr>
+                    <div key={m.user._id} className="member-card">
+                      <div className="member-avatar" style={{ background: ROLE_COLORS[m.role] || '#3b82f6' }}>
+                        {m.user.name?.[0]?.toUpperCase() || '?'}
+                      </div>
+                      <div className="member-info">
+                        <strong>{m.user.name}</strong>
+                        <div className="muted small">{m.user.email}</div>
+                      </div>
+                      <span className="pill member-role" style={{ background: ROLE_COLORS[m.role] || '#666' }}>
+                        {memberRoles.labels?.[m.role]?.split(' (')[0] || m.role}
+                      </span>
+                      <button
+                        type="button"
+                        className="ghost small danger"
+                        onClick={() => removeMember(m.user._id)}
+                        title={`Quitar a ${m.user.name}`}
+                      >
+                        ✕ Quitar
+                      </button>
+                    </div>
                   ))}
-                </tbody>
-              </table>
-            ) : (
-              <p className="muted">Sin miembros asignados. Agrega uno por email.</p>
-            )}
+                </div>
+              ) : (
+                <div className="empty-state">
+                  <p className="muted">📭 Aún no hay personas en el equipo de este proyecto.</p>
+                  <p className="muted small">Usa el formulario de arriba para agregar a la primera persona.</p>
+                </div>
+              )}
+            </div>
 
             <div className="modal-actions">
-              <button type="button" className="ghost" onClick={() => setEditing(null)}>Cerrar</button>
+              <button type="button" className="ghost" onClick={() => setEditing(null)}>✓ Cerrar</button>
             </div>
           </div>
         </div>
