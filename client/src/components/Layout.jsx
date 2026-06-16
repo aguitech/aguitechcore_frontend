@@ -1,13 +1,15 @@
 import { NavLink, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext.jsx';
 
-const NAV = [
+const NAV_BASE = [
   { to: '/dashboard', label: 'Dashboard', icon: '📊' },
   { to: '/clients', label: 'Clientes', icon: '👥' },
+  { to: '/projects', label: 'Proyectos', icon: '📁' },
   { to: '/tasks', label: 'Tareas', icon: '✅' },
   { to: '/calendar', label: 'Calendario', icon: '📅' },
-  { to: '/profile', label: 'Perfil', icon: '⚙️' },
 ];
+
+const NAV_ADMIN = { to: '/users', label: 'Usuarios', icon: '👤' };
 
 export default function Layout({ children }) {
   const { user, logout } = useAuth();
@@ -31,7 +33,7 @@ export default function Layout({ children }) {
           </div>
         </div>
         <nav>
-          {NAV.map((n) => (
+          {[...NAV_BASE, ...(user?.role === 'admin' ? [NAV_ADMIN] : []), { to: '/profile', label: 'Perfil', icon: '⚙️' }].map((n) => (
             <NavLink key={n.to} to={n.to} className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}>
               <span className="nav-icon">{n.icon}</span>
               <span>{n.label}</span>
