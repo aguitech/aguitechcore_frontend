@@ -3,6 +3,7 @@ import Layout from '../components/Layout.jsx';
 import api from '../services/api.js';
 
 const STATUS_COLORS = { activo: '#22c55e', pausado: '#f59e0b', completado: '#6366f1' };
+const STATUS_LABELS = { activo: 'Activo', pausado: 'Pausado', completado: 'Completado' };
 
 export default function Dashboard() {
   const [stats, setStats] = useState({ total: 0, activos: 0, completados: 0, promedio: 0 });
@@ -32,21 +33,48 @@ export default function Dashboard() {
       <div className="card">
         <h3>Proyectos recientes</h3>
         {projects.length === 0 ? (
-          <p className="muted">Sin proyectos aún.</p>
+          <p className="muted">Sin proyectos aún. Crea el primero en la sección <strong>Proyectos</strong>.</p>
         ) : (
           <table className="tbl">
             <thead>
-              <tr><th>Proyecto</th><th>Cliente</th><th>Estado</th><th>Progreso</th></tr>
+              <tr><th>Proyecto</th><th>Cliente</th><th>Estado</th><th>Progreso</th><th>Equipo</th></tr>
             </thead>
             <tbody>
               {projects.map((p) => (
                 <tr key={p._id}>
-                  <td>{p.title}</td>
-                  <td>{p.client}</td>
-                  <td><span className="pill" style={{ background: STATUS_COLORS[p.status] }}>{p.status}</span></td>
+                  <td><strong>{p.title}</strong></td>
                   <td>
-                    <div className="bar"><div className="fill" style={{ width: `${p.progress}%` }} /></div>
-                    <small>{p.progress}%</small>
+                    {p.client ? (
+                      <>
+                        <strong>{p.client.name}</strong>
+                        {p.client.company && <div className="muted small">{p.client.company}</div>}
+                      </>
+                    ) : <span className="muted">—</span>}
+                  </td>
+                  <td>
+                    <span className="pill" style={{ background: STATUS_COLORS[p.status] || '#666' }}>
+                      {STATUS_LABELS[p.status] || p.status}
+                    </span>
+                  </td>
+                  <td>
+                    <div className="bar">
+                      <div className="fill" style={{ width: `${p.progress ?? 0}%` }} />
+                    </div>
+                    <small>{p.progress ?? 0}%</small>
+                  </td>
+                  <td>
+                    {p.members?.length > 0 ? (
+                      <div className="avatar-group">
+                        {p.members.slice(0, 3).map((m) => (
+                          <div key={m.user._id} className="avatar-sm" title={m.user.name}>
+                            {m.user.name?.[0]?.toUpperCase() || '?'}
+                          </div>
+                        ))}
+                        {p.members.length > 3 && (
+                          <div className="avatar-sm avatar-more">+{p.members.length - 3}</div>
+                        )}
+                      </div>
+                    ) : <span className="muted small">Sin equipo</span>}
                   </td>
                 </tr>
               ))}
