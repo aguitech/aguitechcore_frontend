@@ -9,6 +9,7 @@ import taskRoutes from './routes/task.routes.js';
 import calendarRoutes from './routes/calendar.routes.js';
 import profileRoutes from './routes/profile.routes.js';
 import userRoutes from './routes/user.routes.js';
+import chatRoutes from './routes/chat.routes.js';
 import { errorHandler } from './middleware/error.js';
 
 dotenv.config();
@@ -28,6 +29,7 @@ app.use('/api/tasks', taskRoutes);
 app.use('/api/calendar', calendarRoutes);
 app.use('/api/profile', profileRoutes);
 app.use('/api/users', userRoutes);
+app.use('/api/chat', chatRoutes);
 
 app.use(errorHandler);
 

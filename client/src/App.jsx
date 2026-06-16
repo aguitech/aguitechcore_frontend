@@ -9,6 +9,7 @@ import Users from './pages/Users.jsx';
 import Tasks from './pages/Tasks.jsx';
 import Calendar from './pages/Calendar.jsx';
 import Profile from './pages/Profile.jsx';
+import Chat from './pages/Chat.jsx';
 
 function PrivateRoute({ children }) {
   const { user, loading } = useAuth();
@@ -27,6 +28,7 @@ export default function App() {
         <Route path="/users" element={<PrivateRoute><Users /></PrivateRoute>} />
         <Route path="/tasks" element={<PrivateRoute><Tasks /></PrivateRoute>} />
         <Route path="/calendar" element={<PrivateRoute><Calendar /></PrivateRoute>} />
+        <Route path="/chat" element={<PrivateRoute><Chat /></PrivateRoute>} />
         <Route path="/profile" element={<PrivateRoute><Profile /></PrivateRoute>} />
         <Route path="*" element={<Navigate to="/dashboard" />} />
       </Routes>
