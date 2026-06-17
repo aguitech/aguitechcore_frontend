@@ -672,4 +672,187 @@ code { background: var(--bg-2); padding: 1px 6px; border-radius: 4px; font-size:
 .doc-code .doc-icon { color: #60a5fa; }
 .doc-archive .doc-icon { color: #a78bfa; }
 .doc-doc .doc-icon { color: #38bdf8; }
+
+/* ============================================================ */
+/* =========== RESPONSIVE — mobile-first desde 320px =========== */
+/* ============================================================ */
+
+/* Mobile hamburger (oculto en desktop) */
+.mobile-hamburger {
+  display: none;
+  position: fixed;
+  top: 14px;
+  left: 14px;
+  z-index: 60;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: #0f172a;
+  border: 1.5px solid #334155;
+  cursor: pointer;
+  padding: 0;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  gap: 5px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
+}
+.mobile-hamburger span {
+  display: block;
+  width: 18px;
+  height: 2px;
+  background: #e2e8f0;
+  border-radius: 1px;
+}
+.mobile-overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  z-index: 55;
+}
+.mobile-close {
+  display: none;
+}
+
+/* === Tablet & down: ≤ 860px === */
+@media (max-width: 860px) {
+  .mobile-hamburger { display: flex; }
+  .mobile-overlay { display: block; }
+
+  .sidebar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    bottom: 0;
+    width: 260px;
+    z-index: 58;
+    transform: translateX(-105%);
+    transition: transform 0.22s ease;
+    box-shadow: 4px 0 20px rgba(0, 0, 0, 0.35);
+    padding-top: 0.5rem;
+  }
+  .sidebar.mobile-open {
+    transform: translateX(0);
+  }
+  .mobile-close {
+    display: flex;
+    position: absolute;
+    top: 8px;
+    right: 10px;
+    background: transparent;
+    color: var(--text);
+    border: none;
+    font-size: 1.8rem;
+    line-height: 1;
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+  }
+  .mobile-close:hover { background: rgba(255, 255, 255, 0.08); }
+
+  .main {
+    padding: 4.25rem 1rem 1rem;  /* deja espacio para el hamburger */
+    width: 100%;
+    max-width: 100%;
+  }
+  .page-head h1 { font-size: 1.35rem; }
+  .page-head { margin-bottom: 1rem; }
+}
+
+/* === Small phones: ≤ 480px === */
+@media (max-width: 480px) {
+  .main { padding: 4rem 0.75rem 0.75rem; }
+  .card { padding: 1rem; border-radius: 8px; }
+  .page-head { gap: 0.5rem; }
+  .page-head h1 { font-size: 1.2rem; }
+  label { font-size: 0.8rem; }
+  input, select, textarea { font-size: 16px; } /* evita zoom iOS */
+  button.primary { padding: 0.55rem 1rem; }
+  button.ghost { padding: 0.45rem 0.75rem; }
+  table { font-size: 0.85rem; }
+  th, td { padding: 0.5rem 0.4rem; }
+}
+
+/* === Tiny phones: ≤ 360px === */
+@media (max-width: 360px) {
+  .main { padding: 3.85rem 0.5rem 0.5rem; }
+  .card { padding: 0.75rem; }
+  .mobile-hamburger { top: 10px; left: 10px; width: 40px; height: 40px; }
+  .sidebar { width: 240px; }
+}
+
+/* ============================================================ */
+/* === Páginas responsivas (modales, listas, formularios)    == */
+/* ============================================================ */
+
+/* Modales — ancho completo en móvil, padding reducido */
+@media (max-width: 860px) {
+  .modal {
+    width: 95vw !important;
+    max-width: 95vw !important;
+    max-height: 92vh !important;
+    padding: 1rem !important;
+    margin: 1vh auto !important;
+  }
+  .modal-bg { padding: 0.5rem; }
+  .modal h2, .modal h3 { font-size: 1.1rem; }
+  .modal .row-actions { flex-wrap: wrap; }
+}
+
+/* Formularios: filas en columna en móvil */
+@media (max-width: 640px) {
+  .grid-2 { grid-template-columns: 1fr !important; }
+  .grid-3 { grid-template-columns: 1fr !important; }
+  .kanban { grid-template-columns: 1fr !important; }
+  .detail-grid { grid-template-columns: 1fr !important; }
+  .row-end { flex-direction: column-reverse; gap: 0.5rem; }
+  .row-end button { width: 100%; }
+}
+
+/* Tablas — scroll horizontal en lugar de wrap feo */
+@media (max-width: 860px) {
+  .table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  table { min-width: 540px; }
+}
+
+/* Dashboard stats: 2 columnas en tablet, 1 en móvil */
+@media (max-width: 860px) {
+  .stats-grid { grid-template-columns: repeat(2, 1fr) !important; }
+}
+@media (max-width: 420px) {
+  .stats-grid { grid-template-columns: 1fr !important; }
+}
+
+/* Calendario: celdas más pequeñas en móvil */
+@media (max-width: 640px) {
+  .cal-day { min-height: 60px; padding: 0.3rem; }
+  .cal-day strong { font-size: 0.85rem; }
+}
+
+/* ProjectDetail header: stack vertical en móvil */
+@media (max-width: 640px) {
+  .project-hero { flex-direction: column; align-items: flex-start !important; gap: 0.75rem; }
+  .project-hero > div:last-child { width: 100%; }
+  .project-hero > div:last-child button { width: 100%; }
+}
+
+/* Drop zone: más compacto en móvil */
+@media (max-width: 640px) {
+  .drop-zone { padding: 1rem 0.6rem; }
+  .drop-zone-icon { font-size: 1.5rem; }
+  .doc-item { padding: 0.5rem; gap: 0.5rem; }
+  .doc-icon { font-size: 1.3rem; width: 1.8rem; }
+  .doc-actions { flex-wrap: wrap; }
+  .doc-actions button { padding: 0.3rem 0.5rem; font-size: 0.75rem; }
+}
+
+/* Doc preview modal: código ocupa menos alto en móvil */
+@media (max-width: 640px) {
+  .code-preview { max-height: 50vh; font-size: 0.75rem; }
+}
+
 .doc-design .doc-icon { color: #f472b6; }

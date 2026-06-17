@@ -24,7 +24,29 @@ function formatMessageTime(iso) {
   return d.toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' });
 }
 
-const PAGE_SIZE = 30;
+// Normalize a sender reference to its string id.
+// `sender` can come back from the API as:
+//   - a populated object:  { _id: 'abc', name, email, role }
+//   - a plain string id:   'abc'
+//   - an ObjectId-shaped object: { _id: ObjectId('abc'), ... }
+// We always coerce to string so the equality check is reliable.
+function getSenderId(sender) {
+  if (!sender) return '';
+  if (typeof sender === 'string') return sender;
+  if (typeof sender === 'object') {
+    // ObjectId has toString() that returns the hex id
+    if (sender._id && typeof sender._id === 'object' && sender._id.toString) {
+      return sender._id.toString();
+    }
+    if (sender._id) return String(sender._id);
+    if (sender.toString && sender.toString !== Object.prototype.toString) {
+      return sender.toString();
+    }
+  }
+  return '';
+}
+
+const PAGE_SIZE = 20;
 
 export default function Chat() {
   const { user: currentUser } = useAuth();
@@ -46,6 +68,7 @@ export default function Chat() {
   const messagesEndRef = useRef(null);
   const messagesTopRef = useRef(null);
   const messagesContainerRef = useRef(null);
+  const inputRef = useRef(null);
   const previousScrollHeight = useRef(0);
 
   // ============== Load conversations ==============
@@ -95,6 +118,8 @@ export default function Chat() {
       loadMessages(activeId, null);
       // Mark as read
       api.post(`/chat/conversations/${activeId}/read`).catch(() => {});
+      // Focus the input immediately when opening a conversation
+      setTimeout(() => inputRef.current?.focus(), 100);
     }
   }, [activeId, loadMessages]);
 
@@ -122,8 +147,8 @@ export default function Chat() {
         if (data.messages && data.messages.length > 0) {
           setMessages((prev) => {
             // Dedupe by _id in case some were already loaded
-            const known = new Set(prev.map((m) => m._id));
-            const fresh = data.messages.filter((m) => !known.has(m._id));
+            const known = new Set(prev.map((m) => String(m._id)));
+            const fresh = data.messages.filter((m) => !known.has(String(m._id)));
             if (fresh.length === 0) return prev;
             return [...prev, ...fresh];
           });
@@ -153,14 +178,26 @@ export default function Chat() {
   }, [messages]);
 
   // ============== Auto-scroll to bottom on new messages ==============
+  // When the conversation first opens (after messages are loaded), force-scroll to the
+  // very bottom so the user sees the latest message right away. For subsequent updates,
+  // only auto-scroll if the user is already near the bottom (don't yank them away from
+  // older messages they're reading).
+  const isFirstLoadRef = useRef(true);
+  useEffect(() => { isFirstLoadRef.current = true; }, [activeId]);
   useEffect(() => {
     if (messagesEndRef.current && messages.length > 0) {
-      // Only auto-scroll on first load or when near bottom
       const c = messagesContainerRef.current;
       if (!c) return;
-      const isNearBottom = c.scrollHeight - c.scrollTop - c.clientHeight < 200;
-      if (isNearBottom) {
-        messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
+      if (isFirstLoadRef.current) {
+        // Force scroll to bottom on first load of a conversation
+        messagesEndRef.current.scrollIntoView({ behavior: 'auto' });
+        isFirstLoadRef.current = false;
+      } else {
+        // Only auto-scroll when user is near bottom (within 200px)
+        const isNearBottom = c.scrollHeight - c.scrollTop - c.clientHeight < 200;
+        if (isNearBottom) {
+          messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
+        }
       }
     }
   }, [messages]);
@@ -236,7 +273,7 @@ export default function Chat() {
 
   return (
     <Layout>
-      <div className="chat-page">
+      <div className={`chat-page ${activeId ? 'has-active' : ''}`}>
         {/* ============ LEFT PANEL: Conversations list ============ */}
         <aside className="chat-sidebar">
           <header className="chat-sidebar-head">
@@ -331,6 +368,15 @@ export default function Chat() {
           ) : (
             <>
               <header className="chat-header">
+                <button
+                  type="button"
+                  className="chat-back-btn ghost small"
+                  onClick={() => setActiveId(null)}
+                  aria-label="Volver a chats"
+                  title="Volver"
+                >
+                  ←
+                </button>
                 {activeOther && (
                   <>
                     <div className="avatar-md">
@@ -365,9 +411,11 @@ export default function Chat() {
                     )}
                     <div ref={messagesTopRef} />
                     {messages.map((m, i) => {
-                      const isMine = m.sender._id === currentUser._id;
+                      const senderId = getSenderId(m.sender);
+                      const myId = getSenderId(currentUser);
+                      const isMine = senderId && myId && senderId === myId;
                       const prev = messages[i - 1];
-                      const showAvatar = !isMine && (!prev || prev.sender._id !== m.sender._id);
+                      const showAvatar = !isMine && (!prev || getSenderId(prev.sender) !== senderId);
                       return (
                         <div
                           key={m._id}
@@ -390,6 +438,7 @@ export default function Chat() {
 
               <form className="chat-input" onSubmit={sendMessage}>
                 <input
+                  ref={inputRef}
                   type="text"
                   placeholder="Escribe un mensaje..."
                   value={text}
