@@ -3,6 +3,7 @@ import {
   getStats, listProjects, getProject, getProjectDetail, createProject, updateProject, deleteProject,
   addMember, removeMember, getMemberRoles
 } from '../controllers/dashboard.controller.js';
+import { exportProjectPdf } from '../controllers/pdfExport.controller.js';
 import { requireAuth } from '../middleware/auth.js';
 
 const router = Router();
@@ -13,6 +14,7 @@ router.get('/projects', listProjects);
 router.get('/projects/member-roles', getMemberRoles);
 router.get('/projects/:id', getProject);
 router.get('/projects/:id/detail', getProjectDetail);
+router.get('/projects/:id/pdf', exportProjectPdf);
 router.post('/projects', createProject);
 router.put('/projects/:id', updateProject);
 router.delete('/projects/:id', deleteProject);

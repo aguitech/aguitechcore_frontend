@@ -34,6 +34,7 @@ export default function ProjectDetail() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [filter, setFilter] = useState('todas');
+  const [exportingPdf, setExportingPdf] = useState(false);
 
   async function load() {
     try {
@@ -46,6 +47,31 @@ export default function ProjectDetail() {
     }
   }
   useEffect(() => { load(); /* eslint-disable-next-line */ }, [id]);
+
+  async function exportPdf() {
+    setExportingPdf(true);
+    try {
+      const token = localStorage.getItem('token');
+      const res = await fetch(`${api.defaults.baseURL}/dashboard/projects/${id}/pdf`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) throw new Error('Error al generar PDF');
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      const safeName = (data?.project?.title || 'proyecto').replace(/[^a-z0-9\-_\s]/gi, '').replace(/\s+/g, '_');
+      a.href = url;
+      a.download = `proyecto_${safeName}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      setError(e.message || 'No se pudo exportar el PDF');
+    } finally {
+      setExportingPdf(false);
+    }
+  }
 
   if (loading) return <Layout><p className="center">Cargando proyecto…</p></Layout>;
   if (error) return <Layout><div className="alert">{error}<br /><Link to="/proyectos">← Volver a proyectos</Link></div></Layout>;
@@ -67,7 +93,18 @@ export default function ProjectDetail() {
             {project.startDate && <> · 📅 {fmtDate(project.startDate)} → {fmtDate(project.endDate)}</>}
           </p>
         </div>
-        <span className="pill big" style={{ background: status.color }}>{status.label}</span>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+          <button
+            type="button"
+            className="ghost"
+            onClick={exportPdf}
+            disabled={exportingPdf}
+            title="Exportar reporte completo en PDF (incluye imágenes)"
+          >
+            {exportingPdf ? '⏳ Generando…' : '📄 Exportar PDF'}
+          </button>
+          <span className="pill big" style={{ background: status.color }}>{status.label}</span>
+        </div>
       </header>
 
       {/* === Stats panel === */}
