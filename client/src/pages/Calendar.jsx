@@ -93,7 +93,11 @@ export default function Calendar() {
                     <span className="dot" style={{ background: e.color }} />
                     <div>
                       <strong>{e.title}</strong>
-                      <small className="muted">{e.type} · {e.status}{e.priority && ` · prioridad ${e.priority}`}</small>
+                      <small className="muted">
+                        {e.type === 'task' ? 'Tarea' : 'Proyecto'} · {e.status}
+                        {e.priority && ` · prioridad ${e.priority}`}
+                        {e.project && ` · ${e.project}`}
+                      </small>
                     </div>
                   </div>
                 ))}
