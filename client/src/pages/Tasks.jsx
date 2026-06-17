@@ -50,7 +50,7 @@ function categorizeFile(mimetype, filename) {
   return 'other';
 }
 
-const EMPTY = { title: '', description: '', status: 'pendiente', priority: 'media', dueDate: '', project: '', client: '' };
+const EMPTY = { title: '', description: '', status: 'pendiente', priority: 'media', dueDate: '', project: '', client: '', assignee: '' };
 
 function fmtSize(b) {
   if (!b) return '';
@@ -135,6 +135,7 @@ export default function Tasks() {
           dueDate: task.dueDate ? task.dueDate.slice(0, 10) : '',
           project: task.project?._id || task.project || '',
           client: task.client?._id || task.client || '',
+          assignee: task.assignee?._id || task.assignee || '',
         }
       : EMPTY);
     setError('');
@@ -144,7 +145,12 @@ export default function Tasks() {
     e.preventDefault();
     setError('');
     try {
-      const payload = { ...form, project: form.project || null, client: form.client || null };
+      const payload = {
+        ...form,
+        project: form.project || null,
+        client: form.client || null,
+        assignee: form.assignee || null,
+      };
       if (!payload.dueDate) delete payload.dueDate;
       if (editing === 'new') await api.post('/tasks', payload);
       else await api.put(`/tasks/${editing}`, payload);
@@ -207,7 +213,7 @@ export default function Tasks() {
       </header>
 
       {editing && (
-        <div className="modal-bg" onClick={() => setEditing(null)}>
+        <div className="modal-bg" style={{ zIndex: 110 }} onClick={() => setEditing(null)}>
           <form className="modal" onClick={(e) => e.stopPropagation()} onSubmit={save}>
             <h3>{editing === 'new' ? 'Nueva tarea' : 'Editar tarea'}</h3>
             {error && <div className="alert">{error}</div>}
@@ -230,7 +236,7 @@ export default function Tasks() {
                 <input type="date" value={form.dueDate} onChange={(e) => setForm({ ...form, dueDate: e.target.value })} />
               </label>
               <label>Proyecto
-                <select value={form.project} onChange={(e) => setForm({ ...form, project: e.target.value })}>
+                <select value={form.project} onChange={(e) => setForm({ ...form, project: e.target.value, assignee: '' })}>
                   <option value="">— Ninguno —</option>
                   {projects.map((p) => <option key={p._id} value={p._id}>{p.title}</option>)}
                 </select>
@@ -241,6 +247,41 @@ export default function Tasks() {
                 <option value="">— Ninguno —</option>
                 {clients.map((c) => <option key={c._id} value={c._id}>{c.name}</option>)}
               </select>
+            </label>
+            <label>Responsable
+              {(() => {
+                const proj = projects.find((p) => p._id === form.project);
+                const memberOpts = [];
+                if (proj) {
+                  if (proj.owner) memberOpts.push({ _id: proj.owner._id, name: proj.owner.name, role: 'Dueño' });
+                  (proj.members || []).forEach((m) => {
+                    if (!memberOpts.some((o) => o._id === m.user._id)) {
+                      memberOpts.push({ _id: m.user._id, name: m.user.name, role: m.role });
+                    }
+                  });
+                }
+                return (
+                  <select
+                    value={form.assignee}
+                    onChange={(e) => setForm({ ...form, assignee: e.target.value })}
+                    disabled={!proj}
+                  >
+                    <option value="">{proj ? '— Sin asignar —' : '— Selecciona un proyecto primero —'}</option>
+                    {memberOpts.map((u) => (
+                      <option key={u._id} value={u._id}>{u.name} ({u.role})</option>
+                    ))}
+                  </select>
+                );
+              })()}
+              {form.project && (() => {
+                const proj = projects.find((p) => p._id === form.project);
+                const total = ((proj?.owner ? 1 : 0) + (proj?.members?.length || 0));
+                return (
+                  <small className="muted">
+                    {total === 0 ? '⚠️ Este proyecto no tiene miembros — agrégalos en "Equipo"' : `Solo puedes asignar miembros del proyecto (${total} disponibles)`}
+                  </small>
+                );
+              })()}
             </label>
             <div className="modal-actions">
               <button type="button" className="ghost" onClick={() => setEditing(null)}>Cancelar</button>
@@ -256,7 +297,12 @@ export default function Tasks() {
           me={me}
           onClose={closeDetail}
           onChanged={(t) => setDetail(t)}
-          onEdit={() => { setEditing(detail._id); setForm({ ...detail, dueDate: detail.dueDate ? detail.dueDate.slice(0,10) : '', project: detail.project?._id || detail.project || '', client: detail.client?._id || detail.client || '' }); setError(''); }}
+          onEdit={() => {
+            // Close the detail modal so the edit form is not behind it
+            const d = detail;
+            closeDetail();
+            open(d);
+          }}
           onStatusChange={(s) => changeStatus(detail, s)}
           onDelete={() => remove(detail._id)}
         />
@@ -289,6 +335,7 @@ export default function Tasks() {
                     {t.project?.title && <span>📁 {t.project.title}</span>}
                     {t.client?.name && <span>👤 {t.client.name}</span>}
                     {t.dueDate && <span>📅 {new Date(t.dueDate).toLocaleDateString('es-MX')}</span>}
+                    {t.assignee?.name && <span>🎯 {t.assignee.name}</span>}
                   </div>
                   <div className="task-actions" onClick={(e) => e.stopPropagation()}>
                     {COLUMNS.filter((c) => c.key !== t.status).map((c) => (
@@ -406,6 +453,7 @@ function TaskDetail({ task, me, onClose, onChanged, onEdit, onStatusChange, onDe
               <span className="prio" style={{ background: PRIORITY_COLORS[task.priority] }}>{task.priority}</span>
               {task.project?.title && <span>📁 {task.project.title}</span>}
               {task.client?.name && <span>👤 {task.client.name}</span>}
+              {task.assignee?.name && <span>🎯 {task.assignee.name}</span>}
               {task.dueDate && <span>📅 {new Date(task.dueDate).toLocaleDateString('es-MX')}</span>}
             </div>
           </div>

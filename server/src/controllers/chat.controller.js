@@ -132,7 +132,8 @@ export async function listMessages(req, res, next) {
   try {
     const { id } = req.params;
     const limit = Math.min(parseInt(req.query.limit, 10) || 30, 100);
-    const cursor = req.query.cursor; // message _id
+    const cursor = req.query.cursor; // message _id (for pagination: messages before this)
+    const since = req.query.since;   // ISO timestamp (for polling: messages after this)
 
     // Verify user is a participant
     const conv = await Conversation.findOne({
@@ -145,13 +146,20 @@ export async function listMessages(req, res, next) {
     if (cursor) {
       filter._id = { $lt: cursor };
     }
+    if (since) {
+      // Polling mode: fetch only messages newer than `since`
+      const sinceDate = new Date(since);
+      if (!isNaN(sinceDate.getTime())) {
+        filter.createdAt = { $gt: sinceDate };
+      }
+    }
     const messages = await Message.find(filter)
       .populate('sender', 'name email role')
       .sort({ _id: -1 })
       .limit(limit)
       .lean();
 
-    const hasMore = messages.length === limit;
+    const hasMore = messages.length === limit && !since;
     const nextCursor = hasMore ? messages[messages.length - 1]._id : null;
 
     res.json({

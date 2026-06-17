@@ -3,6 +3,7 @@ import Project from '../models/Project.js';
 import mongoose from 'mongoose';
 import fs from 'fs';
 import { validateFile, categorizeFile } from '../lib/fileGuard.js';
+import { validateAssignee } from '../lib/assigneeValidator.js';
 
 // Build a filter that shows tasks from projects where user is owner OR member,
 // OR tasks the user owns directly
@@ -35,6 +36,8 @@ export async function listTasks(req, res, next) {
       .populate('images.uploadedBy', 'name email')
       .populate('videos.uploadedBy', 'name email')
       .populate('documents.uploadedBy', 'name email')
+      .populate('assignee', 'name email')
+      .populate('owner', 'name email')
       .sort({ dueDate: 1, createdAt: -1 });
     res.json(tasks);
   } catch (err) { next(err); }
@@ -42,19 +45,40 @@ export async function listTasks(req, res, next) {
 
 export async function createTask(req, res, next) {
   try {
-    const task = await Task.create({ ...req.body, owner: req.user._id });
-    const populated = await task.populate(['project', 'client']);
+    // Validate assignee (must belong to project, if any)
+    const assignee = await validateAssignee(req.body.project, req.body.assignee);
+    const task = await Task.create({
+      ...req.body,
+      assignee,
+      owner: req.user._id,
+    });
+    const populated = await task.populate([
+      'project', 'client', 'assignee', 'owner',
+    ]);
     res.status(201).json(populated);
   } catch (err) { next(err); }
 }
 
 export async function updateTask(req, res, next) {
   try {
+    // Validate assignee (if provided in update)
+    let payload = req.body;
+    if ('assignee' in req.body) {
+      // Need the current project's _id even if not being updated
+      const existing = await Task.findById(req.params.id).select('project');
+      if (!existing) return res.status(404).json({ message: 'Tarea no encontrada' });
+      const projectId = 'project' in req.body ? req.body.project : existing.project;
+      const assignee = await validateAssignee(projectId, req.body.assignee);
+      payload = { ...req.body, assignee };
+    } else if ('project' in req.body && !req.body.project) {
+      // Removing the project is fine (no validation needed)
+    }
     const filter = await buildUserTaskFilter(req.user._id);
     filter._id = req.params.id;
-    const task = await Task.findOneAndUpdate(filter, req.body, { new: true, runValidators: true })
+    const task = await Task.findOneAndUpdate(filter, payload, { new: true, runValidators: true })
       .populate('project', 'title status')
       .populate('client', 'name')
+      .populate('assignee', 'name email')
       .populate('comments.author', 'name email');
     if (!task) return res.status(404).json({ message: 'Tarea no encontrada' });
     res.json(task);

@@ -33,7 +33,9 @@ export default function Projects() {
   const [projects, setProjects] = useState([]);
   const [clients, setClients] = useState([]);
   const [memberRoles, setMemberRoles] = useState({ roles: [], labels: {} });
-  const [editing, setEditing] = useState(null);
+  // Separate states for the two modals so they don't conflict
+  const [editFormId, setEditFormId] = useState(null); // 'new' or project._id — opens edit form
+  const [teamProjectId, setTeamProjectId] = useState(null); // project._id — opens team modal
   const [form, setForm] = useState(EMPTY);
   const [error, setError] = useState('');
   const [filter, setFilter] = useState('todos');
@@ -54,7 +56,7 @@ export default function Projects() {
   useEffect(() => { load(); }, []);
 
   function open(project = null) {
-    setEditing(project ? project._id : 'new');
+    setEditFormId(project ? project._id : 'new');
     setForm(project
       ? {
           title: project.title || '',
@@ -69,9 +71,24 @@ export default function Projects() {
       : EMPTY
     );
     setError('');
+  }
+
+  function openTeam(project) {
+    setTeamProjectId(project._id);
     setMemberMsg({ type: '', text: '' });
     setNewMemberEmail('');
     setNewMemberRole('colaborador');
+  }
+
+  function closeEdit() {
+    setEditFormId(null);
+    setError('');
+  }
+
+  function closeTeam() {
+    setTeamProjectId(null);
+    setMemberMsg({ type: '', text: '' });
+    setNewMemberEmail('');
   }
 
   async function save(e) {
@@ -85,9 +102,9 @@ export default function Projects() {
         setError('Selecciona un cliente');
         return;
       }
-      if (editing === 'new') await api.post('/dashboard/projects', payload);
-      else await api.put(`/dashboard/projects/${editing}`, payload);
-      setEditing(null);
+      if (editFormId === 'new') await api.post('/dashboard/projects', payload);
+      else await api.put(`/dashboard/projects/${editFormId}`, payload);
+      setEditFormId(null);
       load();
     } catch (err) {
       setError(err.response?.data?.message || 'Error al guardar');
@@ -101,17 +118,15 @@ export default function Projects() {
   }
 
   async function addMember() {
-    if (!newMemberEmail) return;
+    if (!newMemberEmail || !teamProjectId) return;
     setMemberMsg({ type: '', text: '' });
     try {
-      const { data } = await api.post(`/dashboard/projects/${editing}/members`, {
+      const { data } = await api.post(`/dashboard/projects/${teamProjectId}/members`, {
         email: newMemberEmail,
         role: newMemberRole,
       });
-      // Update the editing project in place
-      setProjects(projects.map(p => p._id === editing ? data : p));
-      // Also update the form to reflect
-      setForm({ ...form });
+      // Update the team project in place
+      setProjects(projects.map(p => p._id === teamProjectId ? data : p));
       setNewMemberEmail('');
       setMemberMsg({ type: 'ok', text: 'Miembro agregado ✓' });
       // Reload to get the populated members
@@ -122,19 +137,18 @@ export default function Projects() {
   }
 
   async function removeMember(userId) {
+    if (!teamProjectId) return;
     if (!confirm('¿Quitar este miembro?')) return;
     try {
-      const { data } = await api.delete(`/dashboard/projects/${editing}/members/${userId}`);
-      setProjects(projects.map(p => p._id === editing ? data : p));
+      const { data } = await api.delete(`/dashboard/projects/${teamProjectId}/members/${userId}`);
+      setProjects(projects.map(p => p._id === teamProjectId ? data : p));
       load();
     } catch (err) {
       setMemberMsg({ type: 'err', text: err.response?.data?.message || 'Error' });
     }
   }
 
-  const editingProject = editing && editing !== 'new'
-    ? projects.find(p => p._id === editing)
-    : null;
+  const teamProject = teamProjectId ? projects.find(p => p._id === teamProjectId) : null;
 
   const filtered = filter === 'todos' ? projects : projects.filter(p => p.status === filter);
 
@@ -156,10 +170,10 @@ export default function Projects() {
         </div>
       </header>
 
-      {editing && (
-        <div className="modal-bg" onClick={() => setEditing(null)}>
+      {editFormId && (
+        <div className="modal-bg" onClick={closeEdit}>
           <form className="modal modal-lg" onClick={(e) => e.stopPropagation()} onSubmit={save}>
-            <h3>{editing === 'new' ? 'Nuevo proyecto' : 'Editar proyecto'}</h3>
+            <h3>{editFormId === 'new' ? 'Nuevo proyecto' : 'Editar proyecto'}</h3>
             {error && <div className="alert">{error}</div>}
             <div className="grid-2">
               <Field label="Título *" v={form.title} onChange={(v) => setForm({ ...form, title: v })} required />
@@ -195,7 +209,7 @@ export default function Projects() {
             </div>
             <Field label="Descripción" v={form.description} onChange={(v) => setForm({ ...form, description: v })} textarea />
             <div className="modal-actions">
-              <button type="button" className="ghost" onClick={() => setEditing(null)}>Cancelar</button>
+              <button type="button" className="ghost" onClick={closeEdit}>Cancelar</button>
               <button type="submit" className="primary">Guardar proyecto</button>
             </div>
           </form>
@@ -203,13 +217,13 @@ export default function Projects() {
       )}
 
       {/* Modal separado para gestionar miembros del proyecto */}
-      {editingProject && (
-        <div className="modal-bg" onClick={() => setEditing(null)}>
+      {teamProject && (
+        <div className="modal-bg" onClick={closeTeam}>
           <div className="modal modal-lg" onClick={(e) => e.stopPropagation()}>
             <h3>👥 Equipo del proyecto</h3>
             <p className="muted small" style={{ marginTop: '-0.5rem', marginBottom: '1.5rem' }}>
-              <strong>{editingProject.title}</strong>
-              {editingProject.client && <> · Cliente: <strong>{editingProject.client.name}</strong></>}
+              <strong>{teamProject.title}</strong>
+              {teamProject.client && <> · Cliente: <strong>{teamProject.client.name}</strong></>}
             </p>
 
             {memberMsg.text && (
@@ -264,12 +278,12 @@ export default function Projects() {
             {/* === Sección: Miembros actuales === */}
             <div className="members-section">
               <h4 className="section-title">
-                👥 Miembros actuales ({editingProject.members?.length || 0})
+                👥 Miembros actuales ({teamProject.members?.length || 0})
               </h4>
 
-              {editingProject.members?.length > 0 ? (
+              {teamProject.members?.length > 0 ? (
                 <div className="members-list">
-                  {editingProject.members.map((m) => (
+                  {teamProject.members.map((m) => (
                     <div key={m.user._id} className="member-card">
                       <div className="member-avatar" style={{ background: ROLE_COLORS[m.role] || '#3b82f6' }}>
                         {m.user.name?.[0]?.toUpperCase() || '?'}
@@ -303,7 +317,7 @@ export default function Projects() {
             </div>
 
             <div className="modal-actions">
-              <button type="button" className="ghost" onClick={() => setEditing(null)}>✓ Cerrar</button>
+              <button type="button" className="ghost" onClick={closeTeam}>✓ Cerrar</button>
             </div>
           </div>
         </div>
@@ -371,7 +385,7 @@ export default function Projects() {
                   <td className="row-actions">
                     <Link to={`/proyectos/${p._id}`} className="ghost small" style={{ textDecoration: 'none' }}>📊 Detalle</Link>
                     <button className="ghost small" onClick={() => open(p)}>Editar</button>
-                    <button className="ghost small" onClick={() => { setEditing(p._id); setMemberMsg({ type: '', text: '' }); }}>👥 Equipo</button>
+                    <button className="ghost small" onClick={() => { openTeam(p); setMemberMsg({ type: '', text: '' }); }}>👥 Equipo</button>
                     <button className="ghost small danger" onClick={() => remove(p._id)}>Eliminar</button>
                   </td>
                 </tr>

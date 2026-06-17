@@ -33,6 +33,9 @@ const taskSchema = new mongoose.Schema(
     videos: { type: [fileSchema], default: [] },
     documents: { type: [fileSchema], default: [] }, // generic file attachments (.js, .html, .pdf, .docx, archives, etc.)
     comments: { type: [commentSchema], default: [] },
+    // Responsable: solo puede ser un miembro del proyecto (o el owner del proyecto).
+    // Si es null, la tarea queda sin asignar (sigue siendo del owner de la tarea).
+    assignee: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
   },
   { timestamps: true }
 );

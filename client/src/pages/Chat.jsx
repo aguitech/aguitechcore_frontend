@@ -98,6 +98,60 @@ export default function Chat() {
     }
   }, [activeId, loadMessages]);
 
+  // ============== Polling: detect new messages in real time ==============
+  // Every 4 seconds, check if the active conversation has new messages.
+  // If yes, fetch only the new ones (after the last known message timestamp)
+  // and append to the list. Also refresh conversation list for unread badges.
+  const lastMessageTimestampRef = useRef(null);
+  useEffect(() => { lastMessageTimestampRef.current = null; }, [activeId]);
+
+  useEffect(() => {
+    if (!activeId) return;
+    let cancelled = false;
+    const tick = async () => {
+      try {
+        // 1) Refresh conversation list (so unread badges update)
+        const convRes = await api.get('/chat/conversations');
+        if (cancelled) return;
+        setConversations(convRes.data);
+        // 2) Fetch only messages after the last known timestamp
+        const since = lastMessageTimestampRef.current;
+        const params = { limit: 50, since: since || '' };
+        const { data } = await api.get(`/chat/conversations/${activeId}/messages`, { params });
+        if (cancelled) return;
+        if (data.messages && data.messages.length > 0) {
+          setMessages((prev) => {
+            // Dedupe by _id in case some were already loaded
+            const known = new Set(prev.map((m) => m._id));
+            const fresh = data.messages.filter((m) => !known.has(m._id));
+            if (fresh.length === 0) return prev;
+            return [...prev, ...fresh];
+          });
+          // Update the timestamp cursor to the latest message
+          const latest = data.messages[data.messages.length - 1];
+          if (latest?.createdAt) lastMessageTimestampRef.current = latest.createdAt;
+        }
+      } catch (err) {
+        // Silent: polling failures shouldn't bother the user
+        console.warn('poll tick failed', err.message);
+      }
+    };
+    // Run every 4 seconds
+    const interval = setInterval(tick, 4000);
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+    };
+  }, [activeId]);
+
+  // Update the timestamp cursor whenever messages change (covers local sends)
+  useEffect(() => {
+    if (messages.length > 0) {
+      const latest = messages[messages.length - 1];
+      if (latest?.createdAt) lastMessageTimestampRef.current = latest.createdAt;
+    }
+  }, [messages]);
+
   // ============== Auto-scroll to bottom on new messages ==============
   useEffect(() => {
     if (messagesEndRef.current && messages.length > 0) {
