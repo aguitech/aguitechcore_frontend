@@ -31,6 +31,7 @@ const taskSchema = new mongoose.Schema(
     owner: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
     images: { type: [fileSchema], default: [] },
     videos: { type: [fileSchema], default: [] },
+    documents: { type: [fileSchema], default: [] }, // generic file attachments (.js, .html, .pdf, .docx, archives, etc.)
     comments: { type: [commentSchema], default: [] },
   },
   { timestamps: true }

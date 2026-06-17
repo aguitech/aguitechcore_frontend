@@ -11,6 +11,45 @@ const COLUMNS = [
 
 const PRIORITY_COLORS = { alta: '#ef4444', media: '#f59e0b', baja: '#22c55e' };
 
+// Category for generic documents — used to pick an icon + preview style
+const DOC_ICONS = {
+  image: '🖼️',
+  video: '🎬',
+  audio: '🎵',
+  pdf: '📕',
+  archive: '📦',
+  code: '📄',
+  doc: '📃',
+  design: '🎨',
+  font: '🔤',
+  other: '📎',
+};
+
+// Returns the icon for a given mimetype + filename
+function fileIcon(mimetype, filename) {
+  const cat = categorizeFile(mimetype, filename);
+  return DOC_ICONS[cat] || '📎';
+}
+
+function categorizeFile(mimetype, filename) {
+  if (mimetype?.startsWith('image/')) return 'image';
+  if (mimetype?.startsWith('video/')) return 'video';
+  if (mimetype?.startsWith('audio/')) return 'audio';
+  if (mimetype === 'application/pdf') return 'pdf';
+  const ext = (filename?.split('.').pop() || '').toLowerCase();
+  if (['zip', 'rar', '7z', 'tar', 'gz'].includes(ext)) return 'archive';
+  if (
+    mimetype?.startsWith('text/') ||
+    ['js', 'jsx', 'ts', 'tsx', 'html', 'css', 'json', 'xml', 'yml', 'yaml',
+     'md', 'py', 'java', 'c', 'cpp', 'go', 'rs', 'php', 'rb', 'sh', 'sql',
+     'txt', 'csv', 'env', 'ini', 'toml', 'lock'].includes(ext)
+  ) return 'code';
+  if (['doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx', 'odt', 'ods', 'odp'].includes(ext)) return 'doc';
+  if (['psd', 'ai', 'fig', 'sketch', 'xd'].includes(ext)) return 'design';
+  if (['ttf', 'otf', 'woff', 'woff2'].includes(ext)) return 'font';
+  return 'other';
+}
+
 const EMPTY = { title: '', description: '', status: 'pendiente', priority: 'media', dueDate: '', project: '', client: '' };
 
 function fmtSize(b) {
@@ -281,27 +320,47 @@ function TaskDetail({ task, me, onClose, onChanged, onEdit, onStatusChange, onDe
   const [uploading, setUploading] = useState(null);
   const [commentText, setCommentText] = useState('');
   const [error, setError] = useState('');
+  const [rejected, setRejected] = useState([]);
+  const [previewDoc, setPreviewDoc] = useState(null);
+  const [dragOver, setDragOver] = useState(false);
   const imgInput = useRef(null);
   const vidInput = useRef(null);
+  const docInput = useRef(null);
 
   async function upload(kind, files) {
     if (!files?.length) return;
     setUploading(kind);
     setError('');
+    setRejected([]);
     try {
       const fd = new FormData();
       for (const f of files) fd.append('files', f);
-      const { data } = await api.post(`/tasks/${task._id}/${kind}`, fd, {
+      const endpoint = kind === 'documents' ? `/tasks/${task._id}/documents` : `/tasks/${task._id}/${kind}`;
+      const { data } = await api.post(endpoint, fd, {
         headers: { 'Content-Type': 'multipart/form-data' },
       });
-      onChanged(data);
+      // /documents returns { task, rejected }
+      if (kind === 'documents') {
+        onChanged(data.task);
+        if (data.rejected && data.rejected.length > 0) setRejected(data.rejected);
+      } else {
+        onChanged(data);
+      }
     } catch (err) {
       setError(err.response?.data?.message || `Error subiendo ${kind}`);
     } finally {
       setUploading(null);
       if (kind === 'images' && imgInput.current) imgInput.current.value = '';
       if (kind === 'videos' && vidInput.current) vidInput.current.value = '';
+      if (kind === 'documents' && docInput.current) docInput.current.value = '';
     }
+  }
+
+  function onDrop(e) {
+    e.preventDefault();
+    setDragOver(false);
+    const files = Array.from(e.dataTransfer.files || []);
+    if (files.length > 0) upload('documents', files);
   }
 
   async function removeFile(kind, fileId) {
@@ -425,6 +484,106 @@ function TaskDetail({ task, me, onClose, onChanged, onEdit, onStatusChange, onDe
         </section>
 
         <section className="task-section">
+          <header>
+            <h4>📎 Documentos y archivos ({task.documents?.length || 0})</h4>
+            <div>
+              <input
+                ref={docInput}
+                type="file"
+                multiple
+                style={{ display: 'none' }}
+                onChange={(e) => upload('documents', e.target.files)}
+              />
+              <button
+                className="ghost small"
+                disabled={uploading === 'documents'}
+                onClick={() => docInput.current?.click()}
+              >
+                {uploading === 'documents' ? 'Subiendo…' : '+ Subir archivos'}
+              </button>
+            </div>
+          </header>
+
+          <div
+            className={`drop-zone ${dragOver ? 'drag-over' : ''}`}
+            onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
+            onDragLeave={() => setDragOver(false)}
+            onDrop={onDrop}
+            onClick={() => docInput.current?.click()}
+            role="button"
+            tabIndex={0}
+          >
+            <span className="drop-zone-icon">📂</span>
+            <span>Arrastra cualquier archivo aquí, o haz click para seleccionar</span>
+            <small className="muted">
+              .js, .html, .pdf, .docx, .xlsx, .pptx, .zip, .json, código fuente… (máx. 50 MB)
+            </small>
+          </div>
+
+          {rejected.length > 0 && (
+            <div className="alert alert-warn" style={{ marginTop: 8 }}>
+              <strong>⚠️ {rejected.length} archivo(s) rechazado(s):</strong>
+              <ul style={{ margin: '4px 0 0 16px' }}>
+                {rejected.map((r, i) => (
+                  <li key={i}><code>{r.filename}</code>: {r.error}</li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          {(!task.documents || task.documents.length === 0) ? (
+            <p className="muted small" style={{ marginTop: 8 }}>
+              Sin documentos. Sube planos, contratos, código, mockups, ZIPs, lo que necesites.
+            </p>
+          ) : (
+            <ul className="doc-list">
+              {task.documents.map((d) => {
+                const cat = categorizeFile(d.mimetype, d.filename);
+                return (
+                  <li key={d._id} className={`doc-item doc-${cat}`}>
+                    <div className="doc-icon">{fileIcon(d.mimetype, d.filename)}</div>
+                    <div className="doc-body">
+                      <div className="doc-name" title={d.filename}>{d.filename}</div>
+                      <div className="doc-meta muted small">
+                        {fmtSize(d.size)} · subido por {d.uploadedBy?.name || d.uploadedBy?.email || 'alguien'}
+                      </div>
+                    </div>
+                    <div className="doc-actions" onClick={(e) => e.stopPropagation()}>
+                      {(cat === 'pdf' || cat === 'code' || cat === 'image' || cat === 'video' || cat === 'audio') && (
+                        <button
+                          className="ghost small"
+                          onClick={() => setPreviewDoc(d)}
+                          title="Vista previa"
+                        >
+                          👁️
+                        </button>
+                      )}
+                      <a
+                        className="ghost small"
+                        href={d.url}
+                        target="_blank"
+                        rel="noreferrer"
+                        download={d.filename}
+                        title="Descargar"
+                      >
+                        ⬇
+                      </a>
+                      <button
+                        className="ghost small danger"
+                        onClick={() => removeFile('documents', d._id)}
+                        title="Eliminar"
+                      >
+                        ×
+                      </button>
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </section>
+
+        <section className="task-section">
           <header><h4>💬 Comentarios ({task.comments?.length || 0})</h4></header>
           <form onSubmit={sendComment} className="comment-form">
             <textarea
@@ -464,6 +623,72 @@ function TaskDetail({ task, me, onClose, onChanged, onEdit, onStatusChange, onDe
 
         <div className="modal-actions">
           <button className="ghost" onClick={onClose}>Cerrar</button>
+        </div>
+      </div>
+
+      {previewDoc && <DocPreview doc={previewDoc} onClose={() => setPreviewDoc(null)} />}
+    </div>
+  );
+}
+
+// === Preview modal for documents ===
+function DocPreview({ doc, onClose }) {
+  const cat = categorizeFile(doc.mimetype, doc.filename);
+  const [text, setText] = useState(null);
+  const [textError, setTextError] = useState('');
+
+  // Load text content for code/text files
+  useEffect(() => {
+    if (cat !== 'code' && cat !== 'doc' && cat !== 'other') return;
+    const ext = (doc.filename?.split('.').pop() || '').toLowerCase();
+    if (['zip', 'rar', '7z', 'tar', 'gz', 'pdf', 'png', 'jpg', 'jpeg', 'gif', 'webp', 'mp4', 'webm', 'mp3', 'wav'].includes(ext)) return;
+    api.get(doc.url, { responseType: 'text', transformResponse: [(d) => d] })
+      .then((r) => setText(typeof r.data === 'string' ? r.data : ''))
+      .catch((err) => setTextError(err.message || 'No se pudo leer el archivo'));
+  }, [doc.url, cat]);
+
+  return (
+    <div className="modal-bg" onClick={onClose} style={{ zIndex: 100 }}>
+      <div className="modal modal-lg" onClick={(e) => e.stopPropagation()} style={{ maxHeight: '90vh' }}>
+        <div className="task-detail-head">
+          <div>
+            <h3 style={{ marginBottom: 4 }}>
+              {fileIcon(doc.mimetype, doc.filename)} {doc.filename}
+            </h3>
+            <div className="task-meta muted small">
+              {doc.mimetype} · {fmtSize(doc.size)}
+            </div>
+          </div>
+          <div className="task-actions">
+            <a className="ghost small" href={doc.url} download={doc.filename} target="_blank" rel="noreferrer">⬇ Descargar</a>
+            <button className="ghost small" onClick={onClose}>Cerrar</button>
+          </div>
+        </div>
+
+        <div className="doc-preview">
+          {cat === 'image' && (
+            <img src={doc.url} alt={doc.filename} style={{ maxWidth: '100%', maxHeight: '70vh' }} />
+          )}
+          {cat === 'video' && (
+            <video src={doc.url} controls style={{ maxWidth: '100%', maxHeight: '70vh' }} />
+          )}
+          {cat === 'audio' && (
+            <audio src={doc.url} controls style={{ width: '100%' }} />
+          )}
+          {cat === 'pdf' && (
+            <iframe
+              src={doc.url}
+              title={doc.filename}
+              style={{ width: '100%', height: '70vh', border: 'none', background: '#1a1a1a' }}
+            />
+          )}
+          {(cat === 'code' || cat === 'doc' || cat === 'other') && (
+            <pre className="code-preview">
+              {textError
+                ? <span style={{ color: '#ef4444' }}>{textError}</span>
+                : (text === null ? 'Cargando…' : text)}
+            </pre>
+          )}
         </div>
       </div>
     </div>

@@ -2,6 +2,7 @@ import Task from '../models/Task.js';
 import Project from '../models/Project.js';
 import mongoose from 'mongoose';
 import fs from 'fs';
+import { validateFile, categorizeFile } from '../lib/fileGuard.js';
 
 // Build a filter that shows tasks from projects where user is owner OR member,
 // OR tasks the user owns directly
@@ -33,6 +34,7 @@ export async function listTasks(req, res, next) {
       .populate('comments.author', 'name email')
       .populate('images.uploadedBy', 'name email')
       .populate('videos.uploadedBy', 'name email')
+      .populate('documents.uploadedBy', 'name email')
       .sort({ dueDate: 1, createdAt: -1 });
     res.json(tasks);
   } catch (err) { next(err); }
@@ -76,6 +78,7 @@ export async function deleteTask(req, res, next) {
     };
     cleanup(task.images);
     cleanup(task.videos);
+    cleanup(task.documents);
     res.json({ ok: true });
   } catch (err) { next(err); }
 }
@@ -127,10 +130,62 @@ export async function addVideos(req, res, next) {
   } catch (err) { next(err); }
 }
 
+// Generic documents (.js, .html, .pdf, .docx, .zip, source code, etc.)
+// Validates extension + MIME + magic bytes via fileGuard.
+export async function addDocuments(req, res, next) {
+  try {
+    const filter = await buildUserTaskFilter(req.user._id);
+    filter._id = req.params.id;
+    const files = req.files || [];
+    if (!files.length) return res.status(400).json({ message: 'Sin archivos' });
+
+    const accepted = [];
+    const rejected = [];
+    for (const f of files) {
+      const check = validateFile({
+        originalname: f.originalname,
+        mimetype: f.mimetype,
+        buffer: f.buffer, // only present when memoryStorage is used
+      });
+      if (!check.ok) {
+        // Remove rejected file from disk if it was saved
+        if (f.path) fs.unlink(f.path, () => {});
+        rejected.push({ filename: f.originalname, error: check.error });
+      } else {
+        accepted.push(fileToObject(f, req.user._id));
+      }
+    }
+
+    // If every file was rejected, return 400 with the list
+    if (accepted.length === 0) {
+      return res.status(400).json({
+        message: 'Ningún archivo pasó la validación',
+        rejected,
+      });
+    }
+
+    const task = await Task.findOneAndUpdate(
+      filter,
+      { $push: { documents: { $each: accepted } } },
+      { new: true }
+    )
+      .populate('documents.uploadedBy', 'name email')
+      .populate('comments.author', 'name email');
+
+    if (!task) {
+      // Cleanup just-uploaded files since the task wasn't found
+      for (const f of files) if (f.path) fs.unlink(f.path, () => {});
+      return res.status(404).json({ message: 'Tarea no encontrada' });
+    }
+
+    res.json({ task, rejected });
+  } catch (err) { next(err); }
+}
+
 export async function deleteFile(req, res, next) {
   try {
     const { id, kind, fileId } = req.params;
-    if (!['images', 'videos'].includes(kind)) {
+    if (!['images', 'videos', 'documents'].includes(kind)) {
       return res.status(400).json({ message: 'Tipo inválido' });
     }
     const filter = await buildUserTaskFilter(req.user._id);
