@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import Layout from '../components/Layout.jsx';
 import api from '../services/api.js';
 
@@ -31,18 +32,25 @@ export default function Dashboard() {
       </div>
 
       <div className="card">
-        <h3>Proyectos recientes</h3>
+        <header className="card-head" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.8rem' }}>
+          <h3 style={{ margin: 0 }}>Proyectos recientes</h3>
+          <Link to="/proyectos" className="ghost small" style={{ textDecoration: 'none' }}>Ver todos →</Link>
+        </header>
         {projects.length === 0 ? (
           <p className="muted">Sin proyectos aún. Crea el primero en la sección <strong>Proyectos</strong>.</p>
         ) : (
           <table className="tbl">
             <thead>
-              <tr><th>Proyecto</th><th>Cliente</th><th>Estado</th><th>Progreso</th><th>Equipo</th></tr>
+              <tr><th>Proyecto</th><th>Cliente</th><th>Estado</th><th>Progreso</th><th>Equipo</th><th></th></tr>
             </thead>
             <tbody>
               {projects.map((p) => (
                 <tr key={p._id}>
-                  <td><strong>{p.title}</strong></td>
+                  <td>
+                    <Link to={`/proyectos/${p._id}`} style={{ textDecoration: 'none', color: 'inherit' }}>
+                      <strong style={{ color: 'var(--accent)' }}>{p.title}</strong>
+                    </Link>
+                  </td>
                   <td>
                     {p.client ? (
                       <>
@@ -75,6 +83,11 @@ export default function Dashboard() {
                         )}
                       </div>
                     ) : <span className="muted small">Sin equipo</span>}
+                  </td>
+                  <td>
+                    <Link to={`/proyectos/${p._id}`} className="ghost small" style={{ textDecoration: 'none' }} title="Ver detalle del proyecto">
+                      📊 Detalle
+                    </Link>
                   </td>
                 </tr>
               ))}

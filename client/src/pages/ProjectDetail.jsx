@@ -152,7 +152,7 @@ export default function ProjectDetail() {
                   return (
                     <tr key={t._id}>
                       <td>
-                        <Link to="/tareas" state={{ openTaskId: t._id }}>
+                        <Link to={`/tasks?task=${t._id}`}>
                           <strong>{t.title}</strong>
                         </Link>
                         {t.description && <div className="muted small">{t.description.slice(0, 60)}{t.description.length > 60 ? '…' : ''}</div>}

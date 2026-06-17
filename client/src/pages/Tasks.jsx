@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import Layout from '../components/Layout.jsx';
 import api from '../services/api.js';
 
@@ -31,6 +32,7 @@ function timeAgo(iso) {
 }
 
 export default function Tasks() {
+  const [searchParams, setSearchParams] = useSearchParams();
   const [tasks, setTasks] = useState([]);
   const [projects, setProjects] = useState([]);
   const [clients, setClients] = useState([]);
@@ -42,6 +44,7 @@ export default function Tasks() {
   const [fProject, setFProject] = useState('');
   const [fClient, setFClient] = useState('');
   const [fPriority, setFPriority] = useState('');
+  const openedTaskRef = useRef(null);
 
   async function load() {
     const params = new URLSearchParams();
@@ -61,6 +64,29 @@ export default function Tasks() {
     setMe(prof.data?.user || null);
   }
   useEffect(() => { load(); /* eslint-disable-next-line */ }, [fProject, fClient, fPriority]);
+
+  // Auto-open detail modal if ?task=<id> is in the URL (e.g. coming from project detail)
+  useEffect(() => {
+    const taskId = searchParams.get('task');
+    if (!taskId || tasks.length === 0) return;
+    if (openedTaskRef.current === taskId) return; // already opened
+    const found = tasks.find(t => t._id === taskId);
+    if (found) {
+      setDetail(found);
+      openedTaskRef.current = taskId;
+    }
+  }, [tasks, searchParams]);
+
+  function closeDetail() {
+    setDetail(null);
+    // Strip ?task from URL so refresh doesn't reopen
+    if (searchParams.get('task')) {
+      const next = new URLSearchParams(searchParams);
+      next.delete('task');
+      setSearchParams(next, { replace: true });
+    }
+    openedTaskRef.current = null;
+  }
 
   function open(task = null) {
     setEditing(task ? task._id : 'new');
@@ -106,7 +132,7 @@ export default function Tasks() {
   async function remove(id) {
     if (!confirm('¿Eliminar tarea?')) return;
     await api.delete(`/tasks/${id}`);
-    if (detail?._id === id) setDetail(null);
+    if (detail?._id === id) closeDetail();
     load();
   }
 
@@ -189,7 +215,7 @@ export default function Tasks() {
         <TaskDetail
           task={detail}
           me={me}
-          onClose={() => setDetail(null)}
+          onClose={closeDetail}
           onChanged={(t) => setDetail(t)}
           onEdit={() => { setEditing(detail._id); setForm({ ...detail, dueDate: detail.dueDate ? detail.dueDate.slice(0,10) : '', project: detail.project?._id || detail.project || '', client: detail.client?._id || detail.client || '' }); setError(''); }}
           onStatusChange={(s) => changeStatus(detail, s)}
