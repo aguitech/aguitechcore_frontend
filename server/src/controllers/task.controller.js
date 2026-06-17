@@ -1,5 +1,7 @@
 import Task from '../models/Task.js';
 import Project from '../models/Project.js';
+import mongoose from 'mongoose';
+import fs from 'fs';
 
 // Build a filter that shows tasks from projects where user is owner OR member,
 // OR tasks the user owns directly
@@ -25,6 +27,9 @@ export async function listTasks(req, res, next) {
     const tasks = await Task.find(filter)
       .populate('project', 'title status')
       .populate('client', 'name')
+      .populate('comments.author', 'name email')
+      .populate('images.uploadedBy', 'name email')
+      .populate('videos.uploadedBy', 'name email')
       .sort({ dueDate: 1, createdAt: -1 });
     res.json(tasks);
   } catch (err) { next(err); }
@@ -44,7 +49,8 @@ export async function updateTask(req, res, next) {
     filter._id = req.params.id;
     const task = await Task.findOneAndUpdate(filter, req.body, { new: true, runValidators: true })
       .populate('project', 'title status')
-      .populate('client', 'name');
+      .populate('client', 'name')
+      .populate('comments.author', 'name email');
     if (!task) return res.status(404).json({ message: 'Tarea no encontrada' });
     res.json(task);
   } catch (err) { next(err); }
@@ -56,6 +62,130 @@ export async function deleteTask(req, res, next) {
     filter._id = req.params.id;
     const task = await Task.findOneAndDelete(filter);
     if (!task) return res.status(404).json({ message: 'Tarea no encontrada' });
+    // Cleanup files on disk
+    const cleanup = (arr = []) => {
+      for (const f of arr) {
+        if (f.url && f.url.startsWith('/uploads/')) {
+          const path = `.${f.url}`;
+          fs.unlink(path, () => {});
+        }
+      }
+    };
+    cleanup(task.images);
+    cleanup(task.videos);
     res.json({ ok: true });
+  } catch (err) { next(err); }
+}
+
+// === Attachments ===
+function fileToObject(file, userId) {
+  return {
+    url: `/uploads/${file.filename}`,
+    filename: file.originalname,
+    mimetype: file.mimetype,
+    size: file.size,
+    uploadedBy: userId,
+  };
+}
+
+export async function addImages(req, res, next) {
+  try {
+    const filter = await buildUserTaskFilter(req.user._id);
+    filter._id = req.params.id;
+    const files = req.files || [];
+    const additions = files.map((f) => fileToObject(f, req.user._id));
+    const task = await Task.findOneAndUpdate(
+      filter,
+      { $push: { images: { $each: additions } } },
+      { new: true }
+    )
+      .populate('images.uploadedBy', 'name email')
+      .populate('comments.author', 'name email');
+    if (!task) return res.status(404).json({ message: 'Tarea no encontrada' });
+    res.json(task);
+  } catch (err) { next(err); }
+}
+
+export async function addVideos(req, res, next) {
+  try {
+    const filter = await buildUserTaskFilter(req.user._id);
+    filter._id = req.params.id;
+    const files = req.files || [];
+    const additions = files.map((f) => fileToObject(f, req.user._id));
+    const task = await Task.findOneAndUpdate(
+      filter,
+      { $push: { videos: { $each: additions } } },
+      { new: true }
+    )
+      .populate('videos.uploadedBy', 'name email')
+      .populate('comments.author', 'name email');
+    if (!task) return res.status(404).json({ message: 'Tarea no encontrada' });
+    res.json(task);
+  } catch (err) { next(err); }
+}
+
+export async function deleteFile(req, res, next) {
+  try {
+    const { id, kind, fileId } = req.params;
+    if (!['images', 'videos'].includes(kind)) {
+      return res.status(400).json({ message: 'Tipo inválido' });
+    }
+    const filter = await buildUserTaskFilter(req.user._id);
+    filter._id = id;
+    filter[`${kind}._id`] = new mongoose.Types.ObjectId(fileId);
+    const task = await Task.findOne(filter);
+    if (!task) return res.status(404).json({ message: 'Archivo no encontrado' });
+
+    const file = (task[kind] || []).find((f) => f._id.toString() === fileId);
+    if (file && file.url && file.url.startsWith('/uploads/')) {
+      fs.unlink(`.${file.url}`, () => {});
+    }
+
+    const updated = await Task.findOneAndUpdate(
+      filter,
+      { $pull: { [kind]: { _id: fileId } } },
+      { new: true }
+    );
+    res.json(updated);
+  } catch (err) { next(err); }
+}
+
+// === Comments ===
+export async function addComment(req, res, next) {
+  try {
+    const { text } = req.body;
+    if (!text || !text.trim()) return res.status(400).json({ message: 'Comentario vacío' });
+    const filter = await buildUserTaskFilter(req.user._id);
+    filter._id = req.params.id;
+    const task = await Task.findOneAndUpdate(
+      filter,
+      { $push: { comments: { text: text.trim(), author: req.user._id } } },
+      { new: true }
+    ).populate('comments.author', 'name email');
+    if (!task) return res.status(404).json({ message: 'Tarea no encontrada' });
+    res.json(task);
+  } catch (err) { next(err); }
+}
+
+export async function deleteComment(req, res, next) {
+  try {
+    const filter = await buildUserTaskFilter(req.user._id);
+    filter._id = req.params.id;
+    filter['comments._id'] = new mongoose.Types.ObjectId(req.params.commentId);
+    const task = await Task.findOne(filter);
+    if (!task) return res.status(404).json({ message: 'Comentario no encontrado' });
+    // Only author or task owner can delete
+    const comment = task.comments.find((c) => c._id.toString() === req.params.commentId);
+    if (!comment) return res.status(404).json({ message: 'Comentario no encontrado' });
+    const isAuthor = comment.author.toString() === req.user._id.toString();
+    const isTaskOwner = task.owner.toString() === req.user._id.toString();
+    if (!isAuthor && !isTaskOwner) return res.status(403).json({ message: 'Sin permiso' });
+
+    const updated = await Task.findOneAndUpdate(
+      filter,
+      { $pull: { comments: { _id: req.params.commentId } } },
+      { new: true }
+    ).populate('comments.author', 'name email');
+    res.json(updated);
   } catch (err) { next(err); }
 }
