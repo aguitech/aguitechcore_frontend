@@ -65,7 +65,7 @@ export async function deleteTask(req, res, next) {
     // Cleanup files on disk
     const cleanup = (arr = []) => {
       for (const f of arr) {
-        if (f.url && f.url.startsWith('/uploads/')) {
+        if (f.url && f.url.startsWith('/api/uploads/')) {
           const path = `.${f.url}`;
           fs.unlink(path, () => {});
         }
@@ -80,7 +80,7 @@ export async function deleteTask(req, res, next) {
 // === Attachments ===
 function fileToObject(file, userId) {
   return {
-    url: `/uploads/${file.filename}`,
+    url: `/api/uploads/${file.filename}`,
     filename: file.originalname,
     mimetype: file.mimetype,
     size: file.size,
@@ -137,7 +137,7 @@ export async function deleteFile(req, res, next) {
     if (!task) return res.status(404).json({ message: 'Archivo no encontrado' });
 
     const file = (task[kind] || []).find((f) => f._id.toString() === fileId);
-    if (file && file.url && file.url.startsWith('/uploads/')) {
+    if (file && file.url && file.url.startsWith('/api/uploads/')) {
       fs.unlink(`.${file.url}`, () => {});
     }
 

@@ -22,7 +22,7 @@ app.use(cors({ origin: process.env.CLIENT_ORIGIN || 'http://localhost:5173', cre
 app.use(express.json({ limit: '2mb' }));
 
 // Servir archivos subidos
-app.use('/uploads', express.static(path.resolve('uploads')));
+app.use('/api/uploads', express.static(path.resolve('uploads')));
 
 app.get('/api/health', (_req, res) => res.json({ ok: true, service: 'aguittech-core', ts: Date.now() }));
 
