@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import Layout from '../components/Layout.jsx';
 import api from '../services/api.js';
 import { useAuth } from '../context/AuthContext.jsx';
@@ -368,6 +369,7 @@ export default function Projects() {
                     )}
                   </td>
                   <td className="row-actions">
+                    <Link to={`/proyectos/${p._id}`} className="ghost small" style={{ textDecoration: 'none' }}>📊 Detalle</Link>
                     <button className="ghost small" onClick={() => open(p)}>Editar</button>
                     <button className="ghost small" onClick={() => { setEditing(p._id); setMemberMsg({ type: '', text: '' }); }}>👥 Equipo</button>
                     <button className="ghost small danger" onClick={() => remove(p._id)}>Eliminar</button>

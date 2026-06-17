@@ -39,10 +39,18 @@ export default function Tasks() {
   const [form, setForm] = useState(EMPTY);
   const [error, setError] = useState('');
   const [detail, setDetail] = useState(null); // task being viewed in detail modal
+  const [fProject, setFProject] = useState('');
+  const [fClient, setFClient] = useState('');
+  const [fPriority, setFPriority] = useState('');
 
   async function load() {
+    const params = new URLSearchParams();
+    if (fProject) params.set('project', fProject);
+    if (fClient) params.set('client', fClient);
+    if (fPriority) params.set('priority', fPriority);
+    const qs = params.toString();
     const [t, p, c] = await Promise.all([
-      api.get('/tasks'),
+      api.get(`/tasks${qs ? '?' + qs : ''}`),
       api.get('/dashboard/projects'),
       api.get('/clients'),
     ]);
@@ -52,7 +60,7 @@ export default function Tasks() {
     setClients(c.data);
     setMe(prof.data?.user || null);
   }
-  useEffect(() => { load(); }, []);
+  useEffect(() => { load(); /* eslint-disable-next-line */ }, [fProject, fClient, fPriority]);
 
   function open(task = null) {
     setEditing(task ? task._id : 'new');
@@ -109,9 +117,28 @@ export default function Tasks() {
       <header className="page-head">
         <div>
           <h1>Tareas</h1>
-          <p className="muted">Tablero kanban · {tasks.length} tareas totales</p>
+          <p className="muted">Tablero kanban · {tasks.length} tareas visibles</p>
         </div>
-        <button onClick={() => open()} className="primary">+ Nueva tarea</button>
+        <div className="row" style={{ gap: 8, flexWrap: 'wrap' }}>
+          <select value={fProject} onChange={(e) => setFProject(e.target.value)} className="select-sm" title="Filtrar por proyecto">
+            <option value="">📁 Todos los proyectos</option>
+            {projects.map((p) => <option key={p._id} value={p._id}>{p.title}</option>)}
+          </select>
+          <select value={fClient} onChange={(e) => setFClient(e.target.value)} className="select-sm" title="Filtrar por cliente">
+            <option value="">👤 Todos los clientes</option>
+            {clients.map((c) => <option key={c._id} value={c._id}>{c.name}</option>)}
+          </select>
+          <select value={fPriority} onChange={(e) => setFPriority(e.target.value)} className="select-sm" title="Filtrar por prioridad">
+            <option value="">🚦 Cualquier prioridad</option>
+            <option value="alta">🔴 Alta</option>
+            <option value="media">🟡 Media</option>
+            <option value="baja">🟢 Baja</option>
+          </select>
+          {(fProject || fClient || fPriority) && (
+            <button onClick={() => { setFProject(''); setFClient(''); setFPriority(''); }} className="ghost small">✕ Limpiar</button>
+          )}
+          <button onClick={() => open()} className="primary">+ Nueva tarea</button>
+        </div>
       </header>
 
       {editing && (

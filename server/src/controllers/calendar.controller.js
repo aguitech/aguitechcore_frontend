@@ -30,7 +30,7 @@ function buildUserProjectFilter(userId) {
 
 export async function getEvents(req, res, next) {
   try {
-    const { from, to } = req.query;
+    const { from, to, project, client } = req.query;
     const dateFilter = {};
     if (from) dateFilter.$gte = new Date(from);
     if (to) dateFilter.$lte = new Date(to);
@@ -38,16 +38,21 @@ export async function getEvents(req, res, next) {
     // 1) Tareas visibles para el usuario con dueDate dentro del rango
     const taskFilter = await buildUserTaskFilter(req.user._id);
     if (Object.keys(dateFilter).length) taskFilter.dueDate = dateFilter;
+    if (project) taskFilter.project = project;
+    if (client) taskFilter.client = client;
     const tasks = await Task.find(taskFilter)
-      .select('title dueDate status priority project')
+      .select('title dueDate status priority project client')
       .populate('project', 'title')
+      .populate('client', 'name')
       .lean();
 
     // 2) Proyectos visibles con endDate dentro del rango
     const projectFilter = buildUserProjectFilter(req.user._id);
+    if (project) projectFilter._id = project;
     if (Object.keys(dateFilter).length) projectFilter.endDate = dateFilter;
     const projects = await Project.find(projectFilter)
-      .select('title endDate status startDate')
+      .select('title endDate status startDate client')
+      .populate('client', 'name')
       .lean();
 
     const events = [
@@ -59,6 +64,9 @@ export async function getEvents(req, res, next) {
         status: t.status,
         priority: t.priority,
         project: t.project ? t.project.title : null,
+        projectId: t.project?._id || null,
+        client: t.client ? t.client.name : null,
+        clientId: t.client?._id || null,
         color: t.status === 'hecho' ? '#22c55e' : t.priority === 'alta' ? '#ef4444' : '#FF6A00',
       })),
       ...projects
@@ -69,6 +77,8 @@ export async function getEvents(req, res, next) {
           title: p.title,
           date: p.endDate,
           status: p.status,
+          projectId: p._id,
+          client: p.client ? p.client.name : null,
           color: '#3b82f6',
         })),
     ];

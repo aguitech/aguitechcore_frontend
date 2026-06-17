@@ -24,6 +24,9 @@ export async function listTasks(req, res, next) {
   try {
     const filter = await buildUserTaskFilter(req.user._id);
     if (req.query.status) filter.status = req.query.status;
+    if (req.query.project) filter.project = req.query.project;
+    if (req.query.client) filter.client = req.query.client;
+    if (req.query.priority) filter.priority = req.query.priority;
     const tasks = await Task.find(filter)
       .populate('project', 'title status')
       .populate('client', 'name')

@@ -7,7 +7,11 @@ const DAYS = ['L', 'M', 'M', 'J', 'V', 'S', 'D'];
 
 export default function Calendar() {
   const [events, setEvents] = useState([]);
+  const [projects, setProjects] = useState([]);
+  const [clients, setClients] = useState([]);
   const [selected, setSelected] = useState(null);
+  const [fProject, setFProject] = useState('');
+  const [fClient, setFClient] = useState('');
   const today = new Date();
   const [year, setYear] = useState(today.getFullYear());
   const [month, setMonth] = useState(today.getMonth());
@@ -15,10 +19,19 @@ export default function Calendar() {
   async function load() {
     const from = new Date(year, month, 1).toISOString();
     const to = new Date(year, month + 1, 0, 23, 59, 59).toISOString();
-    const { data } = await api.get(`/calendar/events?from=${from}&to=${to}`);
-    setEvents(data);
+    const params = new URLSearchParams({ from, to });
+    if (fProject) params.set('project', fProject);
+    if (fClient) params.set('client', fClient);
+    const [evRes, pRes, cRes] = await Promise.all([
+      api.get(`/calendar/events?${params}`),
+      api.get('/dashboard/projects'),
+      api.get('/clients'),
+    ]);
+    setEvents(evRes.data);
+    setProjects(pRes.data);
+    setClients(cRes.data);
   }
-  useEffect(() => { load(); }, [year, month]);
+  useEffect(() => { load(); /* eslint-disable-next-line */ }, [year, month, fProject, fClient]);
 
   const cells = useMemo(() => {
     const first = new Date(year, month, 1);
@@ -51,10 +64,23 @@ export default function Calendar() {
           <h1>Calendario</h1>
           <p className="muted">Tus tareas y deadlines del mes</p>
         </div>
-        <div className="cal-nav">
-          <button className="ghost" onClick={prev}>‹</button>
-          <strong>{MONTHS[month]} {year}</strong>
-          <button className="ghost" onClick={next}>›</button>
+        <div className="row" style={{ gap: 8, flexWrap: 'wrap' }}>
+          <select value={fProject} onChange={(e) => setFProject(e.target.value)} className="select-sm" title="Filtrar por proyecto">
+            <option value="">📁 Todos los proyectos</option>
+            {projects.map((p) => <option key={p._id} value={p._id}>{p.title}</option>)}
+          </select>
+          <select value={fClient} onChange={(e) => setFClient(e.target.value)} className="select-sm" title="Filtrar por cliente">
+            <option value="">👤 Todos los clientes</option>
+            {clients.map((c) => <option key={c._id} value={c._id}>{c.name}</option>)}
+          </select>
+          {(fProject || fClient) && (
+            <button onClick={() => { setFProject(''); setFClient(''); }} className="ghost small">✕ Limpiar</button>
+          )}
+          <div className="cal-nav">
+            <button className="ghost" onClick={prev}>‹</button>
+            <strong>{MONTHS[month]} {year}</strong>
+            <button className="ghost" onClick={next}>›</button>
+          </div>
         </div>
       </header>
 
