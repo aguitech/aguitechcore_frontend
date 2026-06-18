@@ -124,6 +124,12 @@ textarea { resize: vertical; font-family: inherit; }
 .tbl th { color: var(--muted); font-weight: 500; font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.05em; }
 .tbl tr:last-child td { border-bottom: none; }
 .pill { display: inline-block; padding: 2px 10px; border-radius: 999px; color: white; font-size: 0.75rem; text-transform: capitalize; }
+.pill-ok { background: #22c55e; }
+.pill-off { background: #6b7280; }
+.card-head-row { display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; }
+.card-head-row .muted { font-size: 0.85rem; }
+.row-actions { white-space: nowrap; }
+.row-actions .ghost { margin-right: 6px; }
 .bar { background: var(--bg-2); border-radius: 4px; height: 8px; overflow: hidden; margin-bottom: 4px; }
 .fill { background: var(--accent); height: 100%; transition: width 0.4s; }
 code { background: var(--bg-2); padding: 1px 6px; border-radius: 4px; font-size: 0.85em; }

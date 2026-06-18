@@ -9,8 +9,10 @@ import clientRoutes from './routes/client.routes.js';
 import taskRoutes from './routes/task.routes.js';
 import calendarRoutes from './routes/calendar.routes.js';
 import profileRoutes from './routes/profile.routes.js';
+import apikeyRoutes from './routes/apikey.routes.js';
 import userRoutes from './routes/user.routes.js';
 import chatRoutes from './routes/chat.routes.js';
+import mcpRoutes from './routes/mcp.routes.js';
 import { errorHandler } from './middleware/error.js';
 
 dotenv.config();
@@ -32,8 +34,10 @@ app.use('/api/clients', clientRoutes);
 app.use('/api/tasks', taskRoutes);
 app.use('/api/calendar', calendarRoutes);
 app.use('/api/profile', profileRoutes);
+app.use('/api/profile/apikeys', apikeyRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/chat', chatRoutes);
+app.use('/api/mcp', mcpRoutes);
 
 app.use(errorHandler);
 
