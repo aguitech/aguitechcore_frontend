@@ -33,6 +33,31 @@ function resolveUploadPath(url) {
   return null;
 }
 
+// Build an absolute URL for an attachment. If `url` is already absolute
+// (http/https) it's returned as-is; otherwise it's joined with the public
+// base URL. The public base is provided by the caller (HTTP request host
+// for /api routes, env var or fallback for MCP).
+function absoluteAttachmentUrl(url, publicBaseUrl) {
+  if (!url) return null;
+  if (/^https?:\/\//i.test(url)) return url;
+  const base = (publicBaseUrl || '').replace(/\/+$/, '');
+  const path = url.startsWith('/') ? url : `/${url}`;
+  return base ? `${base}${path}` : path;
+}
+
+// Draw a clickable link (underlined, in the link color) at (x,y) of
+// the given width. Returns the y advance so the caller can stack items.
+function drawClickableLink(doc, x, y, width, label, href) {
+  if (!href) return 0;
+  doc.save();
+  doc.fillColor(COLOR.info)
+     .font('Helvetica')
+     .fontSize(9)
+     .text(label, x, y, { width, link: href, underline: true, lineBreak: false });
+  doc.restore();
+  return 12;
+}
+
 async function fetchImageBuffer(url, timeoutMs = 4000) {
   const localPath = resolveUploadPath(url);
   if (localPath) {
@@ -188,7 +213,9 @@ export async function loadProjectReportData(projectId, userId) {
 
 // Render the report into a PDFKit doc. Caller is responsible for
 // piping the doc and calling doc.end() after this returns.
-export async function renderProjectReportPdf(doc, data, requester) {
+// `publicBaseUrl` is used to build absolute URLs for attachment links
+// (so document/video/image filenames become clickable hyperlinks in the PDF).
+export async function renderProjectReportPdf(doc, data, requester, publicBaseUrl = '') {
   const { project, tasks, total, byStatus, byPriority, weighted, overdue, memberStats, allComments, now } = data;
 
   const pageState = { current: 1, total: 1 };
@@ -400,8 +427,13 @@ export async function renderProjectReportPdf(doc, data, requester) {
 
         let cardH = titleH + 16;
         if (hasDesc) cardH += doc.heightOfString(t.description, { font: 'Helvetica', size: 9, width: innerW }) + 12;
-        if (imgCount > 0) cardH += 110;
-        if (docCount > 0) cardH += 16;
+        if (imgCount > 0) {
+          cardH += 110;                                  // thumbnail row
+          // Clickable link rows for image filenames
+          const imgLinkCols = Math.max(1, Math.ceil(imgCount * 90 / innerW));
+          cardH += imgLinkCols * 12 + 6;
+        }
+        if (docCount > 0) cardH += 16 + Math.min(docCount, 6) * 12 + (docCount > 6 ? 12 : 0);
         if (commCount > 0) {
           cardH += 14;
           for (const c of (t.comments || []).slice(0, 3)) {
@@ -461,20 +493,53 @@ export async function renderProjectReportPdf(doc, data, requester) {
             const buf = imageBufs[i];
             const ix = cardX + 10 + i * (slotW + 8);
             const iy = cursorY;
+            const imgMeta = t.images[i];
+            const imgHref = absoluteAttachmentUrl(imgMeta.url, publicBaseUrl);
             if (buf) {
-              try { doc.image(buf, ix, iy, { fit: [slotW, 90], align: 'center', valign: 'center' }); }
-              catch (_) {
+              try {
+                doc.image(buf, ix, iy, { fit: [slotW, 90], align: 'center', valign: 'center' });
+                // Wrap the rendered image in a clickable link rectangle so the
+                // thumbnail itself opens the file in the user's viewer.
+                if (imgHref) doc.link(ix, iy, slotW, 90, imgHref);
+              } catch (_) {
                 doc.rect(ix, iy, slotW, 90).fill(COLOR.bg).stroke(COLOR.border);
+                if (imgHref) doc.link(ix, iy, slotW, 90, imgHref);
                 doc.fillColor(COLOR.muted).font('Helvetica').fontSize(8)
                    .text('(no embedida)', ix, iy + 40, { width: slotW, align: 'center' });
               }
             } else {
               doc.rect(ix, iy, slotW, 90).fill(COLOR.bg).stroke(COLOR.border);
+              if (imgHref) doc.link(ix, iy, slotW, 90, imgHref);
               doc.fillColor(COLOR.muted).font('Helvetica').fontSize(8)
-                 .text(t.images[i].filename.slice(0, 22), ix, iy + 40, { width: slotW, align: 'center' });
+                 .text(imgMeta.filename.slice(0, 22), ix, iy + 40, { width: slotW, align: 'center' });
             }
           }
           cursorY += 96;
+
+          // List every image filename as a clickable link (full URLs) so the
+          // user can open them even if the thumbnail is empty.
+          const linkStartY = cursorY;
+          let linkX = cardX + 10;
+          let linkY = cursorY;
+          const linkColW = innerW;
+          let colUsed = 0;
+          for (const imgMeta of (t.images || [])) {
+            const href = absoluteAttachmentUrl(imgMeta.url, publicBaseUrl);
+            const label = `[IMG] ${imgMeta.filename}`;
+            const labelW = doc.widthOfString(label, { font: 'Helvetica', size: 9, underline: true }) + 18;
+            if (colUsed + labelW > linkColW) {
+              linkX = cardX + 10;
+              linkY += 12;
+              colUsed = 0;
+            }
+            if (href) doc.link(linkX, linkY, Math.min(labelW, linkColW - colUsed), 12, href);
+            doc.fillColor(COLOR.info).font('Helvetica').fontSize(9)
+               .text(label, linkX, linkY, { width: Math.min(labelW, linkColW - colUsed), underline: true, lineBreak: false });
+            linkX += Math.min(labelW, linkColW - colUsed);
+            colUsed += Math.min(labelW, linkColW - colUsed);
+          }
+          if ((t.images || []).length > 0 && linkY > linkStartY) cursorY = linkY + 14;
+          else if ((t.images || []).length > 0) cursorY = linkStartY + 14;
 
           if (imgCount > slots) {
             doc.fillColor(COLOR.muted).font('Helvetica').fontSize(8)
@@ -485,15 +550,25 @@ export async function renderProjectReportPdf(doc, data, requester) {
 
         if (docCount > 0) {
           const items = [
-            ...(t.documents || []).map(d => `[DOC] ${d.filename}`),
-            ...(t.videos || []).map(v => `[VIDEO] ${v.filename}`),
+            ...(t.documents || []).map(d => ({ kind: 'DOC',    label: d.filename, url: d.url })),
+            ...(t.videos   || []).map(v => ({ kind: 'VIDEO', label: v.filename, url: v.url })),
           ];
-          const shown = items.slice(0, 4).join('   ·   ');
-          doc.fillColor(COLOR.muted).font('Helvetica').fontSize(9)
-             .text(`Adjuntos: ${shown}`, cardX + 10, cursorY, { width: innerW });
-          cursorY += 14;
-          if (items.length > 4) {
-            doc.text(`... y ${items.length - 4} adjunto(s) más`, { width: innerW });
+          doc.fillColor(COLOR.muted).font('Helvetica-Bold').fontSize(9)
+             .text(`Adjuntos (${items.length}):`, cardX + 10, cursorY, { width: innerW });
+          cursorY += 12;
+          // Render each attachment as a clickable, underlined link. The label
+          // shows the kind tag + filename; the link target is the absolute URL.
+          for (const it of items.slice(0, 6)) {
+            const href = absoluteAttachmentUrl(it.url, publicBaseUrl);
+            const label = `[${it.kind}] ${it.label}`;
+            ensureSpace(doc, pageState, 14);
+            doc.fillColor(COLOR.info).font('Helvetica').fontSize(9)
+               .text(label, cardX + 14, cursorY, { width: innerW - 4, link: href, underline: true, lineBreak: false });
+            cursorY += 12;
+          }
+          if (items.length > 6) {
+            doc.fillColor(COLOR.muted).font('Helvetica').fontSize(8)
+               .text(`... y ${items.length - 6} adjunto(s) más`, cardX + 14, cursorY, { width: innerW });
             cursorY += 12;
           }
         }
@@ -559,7 +634,7 @@ export async function renderProjectReportPdf(doc, data, requester) {
 
 // High-level helper: build a PDF in memory and return the Buffer.
 // Used by MCP tool `generate_project_report`.
-export async function buildProjectReportPdf(projectId, requester) {
+export async function buildProjectReportPdf(projectId, requester, publicBaseUrl = '') {
   const data = await loadProjectReportData(projectId, requester._id);
   if (!data) return null;
   const doc = new PDFDocument({
@@ -575,7 +650,7 @@ export async function buildProjectReportPdf(projectId, requester) {
   const chunks = [];
   doc.on('data', (c) => chunks.push(c));
   const done = new Promise((resolve) => doc.on('end', () => resolve(Buffer.concat(chunks))));
-  await renderProjectReportPdf(doc, data, requester);
+  await renderProjectReportPdf(doc, data, requester, publicBaseUrl);
   doc.end();
   return done;
 }

@@ -9,6 +9,12 @@ export async function exportProjectPdf(req, res, next) {
     const data = await loadProjectReportData(req.params.id, req.user._id);
     if (!data) return res.status(404).json({ message: 'Proyecto no encontrado' });
 
+    // Build a public base URL from the request so attachment links in the
+    // PDF resolve to absolute https URLs (Traefik terminates TLS for us).
+    const proto = (req.headers['x-forwarded-proto'] || req.protocol || 'https').split(',')[0];
+    const host = req.headers['x-forwarded-host'] || req.headers.host;
+    const publicBaseUrl = host ? `${proto}://${host}` : '';
+
     const doc = new PDFDocument({
       size: 'LETTER',
       margins: { top: MARGIN_TOP, bottom: MARGIN_BOTTOM, left: MARGIN_LEFT, right: MARGIN_RIGHT },
@@ -25,7 +31,7 @@ export async function exportProjectPdf(req, res, next) {
     res.setHeader('Content-Disposition', `attachment; filename="proyecto_${safeName}.pdf"`);
     doc.pipe(res);
 
-    await renderProjectReportPdf(doc, data, req.user);
+    await renderProjectReportPdf(doc, data, req.user, publicBaseUrl);
     doc.end();
   } catch (err) {
     next(err);

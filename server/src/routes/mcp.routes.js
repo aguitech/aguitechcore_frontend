@@ -67,7 +67,14 @@ router.post('/', requireApiKey, async (req, res) => {
       case 'tools/call': {
         const { name, arguments: args } = params || {};
         if (!name) throw rpcError(-32602, 'params.name is required');
-        const content = await callTool(name, args || {}, req.user);
+        // Build a public base URL for tools that emit absolute links (e.g. the
+        // PDF report). The MCP endpoint can be reached through a Traefik front
+        // (x-forwarded-proto/host) or directly, so honor the headers first.
+        const proto = (req.headers['x-forwarded-proto'] || req.protocol || 'https').split(',')[0];
+        const host = req.headers['x-forwarded-host'] || req.headers.host;
+        const publicBaseUrl = process.env.PUBLIC_BASE_URL
+          || (host ? `${proto}://${host}` : '');
+        const content = await callTool(name, args || {}, req.user, { publicBaseUrl });
         // MCP wraps tool results in a content array (text or resource).
         result = {
           content: [{ type: 'text', text: typeof content === 'string' ? content : JSON.stringify(content, null, 2) }],

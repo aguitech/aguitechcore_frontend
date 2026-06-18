@@ -627,10 +627,10 @@ const tools = [
       required: ['project_id'],
       additionalProperties: false,
     },
-    handler: async (user, { project_id }) => {
+    handler: async (user, { project_id }, context = {}) => {
       const { project, error } = await loadProjectForUser(project_id, user._id);
       if (error) throw Object.assign(new Error(error.message), { status: error.status });
-      const buf = await buildProjectReportPdf(project_id, user);
+      const buf = await buildProjectReportPdf(project_id, user, context.publicBaseUrl);
       if (!buf) throw Object.assign(new Error('No se pudo generar el reporte'), { status: 500 });
       return {
         filename: `proyecto_${project.title.replace(/[^a-z0-9\-_\s]/gi, '').replace(/\s+/g, '_')}.pdf`,
@@ -667,7 +667,7 @@ export function listTools() {
   }));
 }
 
-export async function callTool(name, params, user) {
+export async function callTool(name, params, user, context = {}) {
   const t = toolMap.get(name);
   if (!t) throw Object.assign(new Error(`Tool no encontrada: ${name}`), { status: 404 });
   // Validate params against schema minimally (mongo-sanitize is overkill here;
@@ -679,7 +679,7 @@ export async function callTool(name, params, user) {
       }
     }
   }
-  return t.handler(user, params || {});
+  return t.handler(user, params || {}, context);
 }
 
 // ===== Resources =====
