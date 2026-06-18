@@ -20,15 +20,27 @@ import { buildProjectReportPdf } from './pdfReport.js';
 // Mirror the access rules used by HTTP routes. The user parameter is
 // always req.user (or apiKey.user), populated by the auth middleware.
 
+// Robust ObjectId extraction: handles both raw ObjectId AND populated
+// documents (which have ._id). Without this, populated fields like
+// project.owner stringify to "[object Object]" and permission checks
+// silently fail with "[object Object]" === userId comparisons.
+function idOf(field) {
+  if (!field) return null;
+  if (typeof field === 'string') return field;
+  if (field._id) return field._id.toString();
+  return field.toString();
+}
+
 function canSeeProject(project, userId) {
   if (!project) return false;
-  if (project.owner.toString() === userId.toString()) return true;
-  return (project.members || []).some((m) => m.user.toString() === userId.toString());
+  const target = userId.toString();
+  if (idOf(project.owner) === target) return true;
+  return (project.members || []).some((m) => idOf(m.user) === target);
 }
 
 function canEditProject(project, userId) {
   // Only the owner can edit project metadata; members can comment but not edit.
-  return project && project.owner.toString() === userId.toString();
+  return project && idOf(project.owner) === userId.toString();
 }
 
 async function loadProjectForUser(projectId, userId) {
@@ -195,8 +207,8 @@ const tools = [
       if (!task) throw Object.assign(new Error('Tarea no encontrada'), { status: 404 });
       if (task.project) {
         const proj = task.project;
-        const canSee = proj.owner.toString() === user._id.toString()
-          || (proj.members || []).some((m) => m.user.toString() === user._id.toString());
+        const canSee = idOf(proj.owner) === user._id.toString()
+          || (proj.members || []).some((m) => idOf(m.user) === user._id.toString());
         if (!canSee) throw Object.assign(new Error('No tienes acceso a esta tarea'), { status: 403 });
       } else if (task.owner && task.owner._id.toString() !== user._id.toString()) {
         throw Object.assign(new Error('No tienes acceso a esta tarea'), { status: 403 });
@@ -282,8 +294,8 @@ const tools = [
       const task = await Task.findById(task_id).populate('project', 'owner members');
       if (!task) throw Object.assign(new Error('Tarea no encontrada'), { status: 404 });
       if (task.project) {
-        const canSee = task.project.owner.toString() === user._id.toString()
-          || (task.project.members || []).some((m) => m.user.toString() === user._id.toString());
+        const canSee = idOf(task.project.owner) === user._id.toString()
+          || (task.project.members || []).some((m) => idOf(m.user) === user._id.toString());
         if (!canSee) throw Object.assign(new Error('No tienes acceso a esta tarea'), { status: 403 });
       }
       task.status = status;
@@ -308,8 +320,8 @@ const tools = [
       const task = await Task.findById(task_id).populate('project', 'owner members');
       if (!task) throw Object.assign(new Error('Tarea no encontrada'), { status: 404 });
       if (!task.project) throw Object.assign(new Error('Esta tarea no pertenece a un proyecto'), { status: 400 });
-      const canSee = task.project.owner.toString() === user._id.toString()
-        || (task.project.members || []).some((m) => m.user.toString() === user._id.toString());
+      const canSee = idOf(task.project.owner) === user._id.toString()
+        || (task.project.members || []).some((m) => idOf(m.user) === user._id.toString());
       if (!canSee) throw Object.assign(new Error('No tienes acceso a esta tarea'), { status: 403 });
       let assigneeId = null;
       if (assignee_email) {
@@ -340,8 +352,8 @@ const tools = [
       const task = await Task.findById(task_id).populate('project', 'owner members');
       if (!task) throw Object.assign(new Error('Tarea no encontrada'), { status: 404 });
       if (task.project) {
-        const canSee = task.project.owner.toString() === user._id.toString()
-          || (task.project.members || []).some((m) => m.user.toString() === user._id.toString());
+        const canSee = idOf(task.project.owner) === user._id.toString()
+          || (task.project.members || []).some((m) => idOf(m.user) === user._id.toString());
         if (!canSee) throw Object.assign(new Error('No tienes acceso a esta tarea'), { status: 403 });
       }
       task.comments.push({ text: text.trim(), author: user._id });
@@ -484,7 +496,7 @@ const tools = [
       }
       const target = await User.findOne({ email: user_email.toLowerCase().trim() });
       if (!target) throw Object.assign(new Error(`No existe usuario con email ${user_email}`), { status: 400 });
-      const exists = (project.members || []).some((m) => m.user.toString() === target._id.toString());
+      const exists = (project.members || []).some((m) => idOf(m.user) === target._id.toString());
       if (exists) throw Object.assign(new Error('El usuario ya es miembro'), { status: 400 });
       project.members.push({ user: target._id, role: role || 'colaborador' });
       await project.save();
@@ -512,7 +524,7 @@ const tools = [
       }
       const target = await User.findOne({ email: user_email.toLowerCase().trim() });
       if (!target) throw Object.assign(new Error(`No existe usuario con email ${user_email}`), { status: 400 });
-      project.members = (project.members || []).filter((m) => m.user.toString() !== target._id.toString());
+      project.members = (project.members || []).filter((m) => idOf(m.user) !== target._id.toString());
       await project.save();
       return { ok: true };
     },
@@ -721,8 +733,8 @@ export async function readResource(uri, user) {
     const task = await Task.findById(id).populate('project', 'title owner members');
     if (!task) throw Object.assign(new Error('Tarea no encontrada'), { status: 404 });
     if (task.project) {
-      const canSee = task.project.owner.toString() === user._id.toString()
-        || (task.project.members || []).some((m) => m.user.toString() === user._id.toString());
+      const canSee = idOf(task.project.owner) === user._id.toString()
+        || (task.project.members || []).some((m) => idOf(m.user) === user._id.toString());
       if (!canSee) throw Object.assign(new Error('No tienes acceso a esta tarea'), { status: 403 });
     }
     return {
