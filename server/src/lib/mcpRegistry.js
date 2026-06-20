@@ -227,6 +227,9 @@ const tools = [
         comments: (task.comments || []).map((c) => ({
           id: c._id, text: c.text, author: c.author, createdAt: c.createdAt,
         })),
+        links: (task.links || []).map((l) => ({
+          id: l._id, url: l.url, title: l.title, description: l.description, addedBy: l.addedBy, createdAt: l.createdAt,
+        })),
         attachmentCounts: {
           images: (task.images || []).length,
           videos: (task.videos || []).length,
@@ -360,6 +363,113 @@ const tools = [
       await task.save();
       const last = task.comments[task.comments.length - 1];
       return { id: last._id, text: last.text, createdAt: last.createdAt };
+    },
+  },
+
+  // ===== TASK LINKS (external URLs) =====
+  {
+    name: 'add_task_link',
+    description: 'Agrega un enlace externo (URL) a una tarea. Acepta URLs http/https únicamente. Requiere acceso al proyecto.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        task_id: { type: 'string', description: 'ID de la tarea' },
+        url: { type: 'string', description: 'URL completa (debe empezar con http:// o https://)' },
+        title: { type: 'string', description: 'Título corto del enlace (opcional, max 200 chars)' },
+        description: { type: 'string', description: 'Descripción opcional (max 500 chars)' },
+      },
+      required: ['task_id', 'url'],
+      additionalProperties: false,
+    },
+    handler: async (user, { task_id, url, title, description }) => {
+      // Validate URL
+      const trimmed = (url || '').trim();
+      if (!trimmed) throw Object.assign(new Error('URL vacía'), { status: 400 });
+      if (trimmed.length > 2000) throw Object.assign(new Error('URL demasiado larga'), { status: 400 });
+      let parsed;
+      try { parsed = new URL(trimmed); } catch (_) {
+        throw Object.assign(new Error('URL malformada'), { status: 400 });
+      }
+      if (!['http:', 'https:'].includes(parsed.protocol)) {
+        throw Object.assign(new Error('Solo se permiten URLs http(s)'), { status: 400 });
+      }
+
+      const task = await Task.findById(task_id).populate('project', 'owner members');
+      if (!task) throw Object.assign(new Error('Tarea no encontrada'), { status: 404 });
+      if (task.project) {
+        const canSee = idOf(task.project.owner) === user._id.toString()
+          || (task.project.members || []).some((m) => idOf(m.user) === user._id.toString());
+        if (!canSee) throw Object.assign(new Error('No tienes acceso a esta tarea'), { status: 403 });
+      }
+      task.links.push({
+        url: trimmed,
+        title: (title || '').trim().slice(0, 200),
+        description: (description || '').trim().slice(0, 500),
+        addedBy: user._id,
+      });
+      await task.save();
+      const last = task.links[task.links.length - 1];
+      return { id: last._id, url: last.url, title: last.title, createdAt: last.createdAt };
+    },
+  },
+
+  {
+    name: 'list_task_links',
+    description: 'Lista los enlaces externos de una tarea. Requiere acceso al proyecto.',
+    inputSchema: {
+      type: 'object',
+      properties: { task_id: { type: 'string' } },
+      required: ['task_id'],
+      additionalProperties: false,
+    },
+    handler: async (user, { task_id }) => {
+      const task = await Task.findById(task_id)
+        .populate('project', 'owner members')
+        .populate('links.addedBy', 'name email');
+      if (!task) throw Object.assign(new Error('Tarea no encontrada'), { status: 404 });
+      if (task.project) {
+        const canSee = idOf(task.project.owner) === user._id.toString()
+          || (task.project.members || []).some((m) => idOf(m.user) === user._id.toString());
+        if (!canSee) throw Object.assign(new Error('No tienes acceso a esta tarea'), { status: 403 });
+      }
+      return (task.links || []).map((l) => ({
+        id: l._id,
+        url: l.url,
+        title: l.title,
+        description: l.description,
+        addedBy: l.addedBy,
+        createdAt: l.createdAt,
+      }));
+    },
+  },
+
+  {
+    name: 'delete_task_link',
+    description: 'Elimina un enlace de una tarea. Requiere acceso al proyecto.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        task_id: { type: 'string' },
+        link_id: { type: 'string', description: 'ID del enlace a eliminar' },
+      },
+      required: ['task_id', 'link_id'],
+      additionalProperties: false,
+    },
+    handler: async (user, { task_id, link_id }) => {
+      const task = await Task.findById(task_id).populate('project', 'owner members');
+      if (!task) throw Object.assign(new Error('Tarea no encontrada'), { status: 404 });
+      if (task.project) {
+        const canSee = idOf(task.project.owner) === user._id.toString()
+          || (task.project.members || []).some((m) => idOf(m.user) === user._id.toString());
+        if (!canSee) throw Object.assign(new Error('No tienes acceso a esta tarea'), { status: 403 });
+      }
+      const before = (task.links || []).length;
+      task.links = (task.links || []).filter((l) => l._id.toString() !== link_id);
+      if (task.links.length === before) {
+        throw Object.assign(new Error('Enlace no encontrado'), { status: 404 });
+      }
+      await task.save();
+      return { ok: true, removed: before - task.links.length };
     },
   },
 
@@ -581,6 +691,9 @@ const tools = [
         id: m._id,
         text: m.text,
         sender: m.sender,
+        attachments: (m.attachments || []).map((a) => ({
+          kind: a.kind, url: a.url, filename: a.filename, mimetype: a.mimetype, size: a.size,
+        })),
         createdAt: m.createdAt,
       }));
     },
@@ -588,7 +701,7 @@ const tools = [
 
   {
     name: 'send_chat_message',
-    description: 'Envía un mensaje en una conversación de la que el usuario es participante.',
+    description: 'Envía un mensaje en una conversación de la que el usuario es participante. Para adjuntar archivos (fotos/videos/documentos) usa el endpoint REST POST /api/chat/conversations/:id/messages con multipart/form-data (campo "files").',
     inputSchema: {
       type: 'object',
       properties: {

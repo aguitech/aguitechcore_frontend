@@ -36,6 +36,7 @@ export async function listTasks(req, res, next) {
       .populate('images.uploadedBy', 'name email')
       .populate('videos.uploadedBy', 'name email')
       .populate('documents.uploadedBy', 'name email')
+      .populate('links.addedBy', 'name email')
       .populate('assignee', 'name email')
       .populate('owner', 'name email')
       .sort({ dueDate: 1, createdAt: -1 });
@@ -228,6 +229,69 @@ export async function deleteFile(req, res, next) {
       { $pull: { [kind]: { _id: fileId } } },
       { new: true }
     );
+    res.json(updated);
+  } catch (err) { next(err); }
+}
+
+// === Links (external URLs) ===
+// Validate the URL has http(s) scheme to block javascript:/data:/file: etc.
+function validateLinkUrl(url) {
+  if (typeof url !== 'string') return { ok: false, error: 'URL inválida' };
+  const trimmed = url.trim();
+  if (!trimmed) return { ok: false, error: 'URL vacía' };
+  if (trimmed.length > 2000) return { ok: false, error: 'URL demasiado larga' };
+  try {
+    const parsed = new URL(trimmed);
+    if (!['http:', 'https:'].includes(parsed.protocol)) {
+      return { ok: false, error: 'Solo se permiten URLs http(s)' };
+    }
+    return { ok: true, url: trimmed };
+  } catch (_) {
+    return { ok: false, error: 'URL malformada' };
+  }
+}
+
+export async function addLink(req, res, next) {
+  try {
+    const { url, title, description } = req.body || {};
+    const v = validateLinkUrl(url);
+    if (!v.ok) return res.status(400).json({ message: v.error });
+
+    const filter = await buildUserTaskFilter(req.user._id);
+    filter._id = req.params.id;
+    const task = await Task.findOneAndUpdate(
+      filter,
+      {
+        $push: {
+          links: {
+            url: v.url,
+            title: (title || '').trim().slice(0, 200),
+            description: (description || '').trim().slice(0, 500),
+            addedBy: req.user._id,
+          },
+        },
+      },
+      { new: true }
+    ).populate('links.addedBy', 'name email');
+    if (!task) return res.status(404).json({ message: 'Tarea no encontrada' });
+    res.json(task);
+  } catch (err) { next(err); }
+}
+
+export async function deleteLink(req, res, next) {
+  try {
+    const { id, linkId } = req.params;
+    const filter = await buildUserTaskFilter(req.user._id);
+    filter._id = id;
+    filter['links._id'] = new mongoose.Types.ObjectId(linkId);
+    const task = await Task.findOne(filter);
+    if (!task) return res.status(404).json({ message: 'Enlace no encontrado' });
+
+    const updated = await Task.findOneAndUpdate(
+      filter,
+      { $pull: { links: { _id: linkId } } },
+      { new: true }
+    ).populate('links.addedBy', 'name email');
     res.json(updated);
   } catch (err) { next(err); }
 }

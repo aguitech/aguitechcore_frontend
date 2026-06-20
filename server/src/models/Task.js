@@ -11,6 +11,16 @@ const fileSchema = new mongoose.Schema(
   { _id: true, timestamps: { createdAt: true, updatedAt: false } }
 );
 
+const linkSchema = new mongoose.Schema(
+  {
+    url: { type: String, required: true, trim: true },
+    title: { type: String, trim: true, default: '' },
+    description: { type: String, trim: true, default: '', maxlength: 500 },
+    addedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
+  },
+  { _id: true, timestamps: { createdAt: true, updatedAt: false } }
+);
+
 const commentSchema = new mongoose.Schema(
   {
     text: { type: String, required: true, trim: true, maxlength: 2000 },
@@ -32,6 +42,7 @@ const taskSchema = new mongoose.Schema(
     images: { type: [fileSchema], default: [] },
     videos: { type: [fileSchema], default: [] },
     documents: { type: [fileSchema], default: [] }, // generic file attachments (.js, .html, .pdf, .docx, archives, etc.)
+    links: { type: [linkSchema], default: [] }, // external URLs (docs, dashboards, Figma, Drive, etc.)
     comments: { type: [commentSchema], default: [] },
     // Responsable: solo puede ser un miembro del proyecto (o el owner del proyecto).
     // Si es null, la tarea queda sin asignar (sigue siendo del owner de la tarea).

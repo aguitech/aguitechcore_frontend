@@ -324,10 +324,11 @@ export default function Tasks() {
                     <span className="prio" style={{ background: PRIORITY_COLORS[t.priority] }}>{t.priority}</span>
                   </div>
                   {t.description && <p className="muted small">{t.description.slice(0, 80)}{t.description.length > 80 && '…'}</p>}
-                  {(t.images?.length || t.videos?.length || t.comments?.length) ? (
+                  {(t.images?.length || t.videos?.length || t.comments?.length || t.links?.length) ? (
                     <div className="task-meta">
                       {t.images?.length > 0 && <span>🖼️ {t.images.length}</span>}
                       {t.videos?.length > 0 && <span>🎥 {t.videos.length}</span>}
+                      {t.links?.length > 0 && <span>🔗 {t.links.length}</span>}
                       {t.comments?.length > 0 && <span>💬 {t.comments.length}</span>}
                     </div>
                   ) : null}
@@ -370,6 +371,12 @@ function TaskDetail({ task, me, onClose, onChanged, onEdit, onStatusChange, onDe
   const [rejected, setRejected] = useState([]);
   const [previewDoc, setPreviewDoc] = useState(null);
   const [dragOver, setDragOver] = useState(false);
+  // Links state
+  const [linkUrl, setLinkUrl] = useState('');
+  const [linkTitle, setLinkTitle] = useState('');
+  const [linkDesc, setLinkDesc] = useState('');
+  const [linkAdding, setLinkAdding] = useState(false);
+  const [showLinkForm, setShowLinkForm] = useState(false);
   const imgInput = useRef(null);
   const vidInput = useRef(null);
   const docInput = useRef(null);
@@ -441,6 +448,48 @@ function TaskDetail({ task, me, onClose, onChanged, onEdit, onStatusChange, onDe
     } catch (err) {
       setError(err.response?.data?.message || 'Error al eliminar comentario');
     }
+  }
+
+  // === Links ===
+  function resetLinkForm() {
+    setLinkUrl('');
+    setLinkTitle('');
+    setLinkDesc('');
+    setShowLinkForm(false);
+  }
+
+  async function addLink(e) {
+    e?.preventDefault();
+    if (!linkUrl.trim()) return;
+    setLinkAdding(true);
+    setError('');
+    try {
+      const payload = { url: linkUrl.trim() };
+      if (linkTitle.trim()) payload.title = linkTitle.trim();
+      if (linkDesc.trim()) payload.description = linkDesc.trim();
+      const { data } = await api.post(`/tasks/${task._id}/links`, payload);
+      onChanged(data);
+      resetLinkForm();
+    } catch (err) {
+      setError(err.response?.data?.message || 'Error al agregar enlace');
+    } finally {
+      setLinkAdding(false);
+    }
+  }
+
+  async function removeLink(linkId) {
+    if (!confirm('¿Eliminar este enlace?')) return;
+    try {
+      const { data } = await api.delete(`/tasks/${task._id}/links/${linkId}`);
+      onChanged(data);
+    } catch (err) {
+      setError(err.response?.data?.message || 'Error al eliminar enlace');
+    }
+  }
+
+  // Derive a clean hostname for display
+  function linkHostname(url) {
+    try { return new URL(url).hostname.replace(/^www\./, ''); } catch { return url; }
   }
 
   return (
@@ -627,6 +676,94 @@ function TaskDetail({ task, me, onClose, onChanged, onEdit, onStatusChange, onDe
                   </li>
                 );
               })}
+            </ul>
+          )}
+        </section>
+
+        <section className="task-section">
+          <header>
+            <h4>🔗 Enlaces ({task.links?.length || 0})</h4>
+            <div>
+              {!showLinkForm && (
+                <button className="ghost small" onClick={() => setShowLinkForm(true)}>
+                  + Agregar enlace
+                </button>
+              )}
+            </div>
+          </header>
+
+          {showLinkForm && (
+            <form onSubmit={addLink} className="link-form" style={{ marginTop: 8, display: 'grid', gap: 6 }}>
+              <label style={{ fontSize: '0.85em', color: 'var(--muted)' }}>URL * (http:// o https://)</label>
+              <input
+                type="url"
+                value={linkUrl}
+                onChange={(e) => setLinkUrl(e.target.value)}
+                placeholder="https://docs.google.com/..."
+                required
+                autoFocus
+              />
+              <label style={{ fontSize: '0.85em', color: 'var(--muted)' }}>Título (opcional)</label>
+              <input
+                type="text"
+                value={linkTitle}
+                onChange={(e) => setLinkTitle(e.target.value)}
+                placeholder="Ej. Mockup en Figma"
+                maxLength={200}
+              />
+              <label style={{ fontSize: '0.85em', color: 'var(--muted)' }}>Descripción (opcional)</label>
+              <textarea
+                value={linkDesc}
+                onChange={(e) => setLinkDesc(e.target.value)}
+                placeholder="¿Qué hay en este enlace?"
+                maxLength={500}
+                rows={2}
+              />
+              <div className="row" style={{ gap: 8, justifyContent: 'flex-end' }}>
+                <button type="button" className="ghost small" onClick={resetLinkForm} disabled={linkAdding}>Cancelar</button>
+                <button type="submit" className="primary small" disabled={!linkUrl.trim() || linkAdding}>
+                  {linkAdding ? 'Agregando…' : 'Guardar enlace'}
+                </button>
+              </div>
+            </form>
+          )}
+
+          {(!task.links || task.links.length === 0) ? (
+            <p className="muted small" style={{ marginTop: 8 }}>
+              Sin enlaces. Agrega links a Figma, Google Docs, dashboards, Notion, Loom, lo que sea.
+            </p>
+          ) : (
+            <ul className="link-list" style={{ marginTop: 8, listStyle: 'none', padding: 0 }}>
+              {task.links.map((l) => (
+                <li key={l._id} className="link-item" style={{ display: 'flex', gap: 10, padding: '10px 12px', border: '1px solid var(--border, #2a2a2a)', borderRadius: 8, marginBottom: 6, background: 'var(--bg-2, #181818)' }}>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <a
+                      href={l.url}
+                      target="_blank"
+                      rel="noreferrer noopener"
+                      style={{ color: '#FF6A00', textDecoration: 'none', fontWeight: 600, display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+                      title={l.url}
+                    >
+                      🔗 {l.title || l.url}
+                    </a>
+                    <div className="muted small" style={{ marginTop: 2 }}>
+                      <span style={{ opacity: 0.7 }}>{linkHostname(l.url)}</span>
+                      {l.addedBy?.name && <span> · agregado por {l.addedBy.name}</span>}
+                    </div>
+                    {l.description && (
+                      <p style={{ margin: '4px 0 0 0', color: 'var(--muted)', fontSize: '0.9em' }}>{l.description}</p>
+                    )}
+                  </div>
+                  <button
+                    className="ghost small danger"
+                    onClick={() => removeLink(l._id)}
+                    title="Eliminar enlace"
+                    style={{ flexShrink: 0 }}
+                  >
+                    ×
+                  </button>
+                </li>
+              ))}
             </ul>
           )}
         </section>

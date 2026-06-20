@@ -13,6 +13,8 @@ import {
   deleteFile,
   addComment,
   deleteComment,
+  addLink,
+  deleteLink,
 } from '../controllers/task.controller.js';
 import { requireAuth } from '../middleware/auth.js';
 
@@ -98,6 +100,10 @@ router.post(
   addDocuments
 );
 router.delete('/:id/files/:kind/:fileId', deleteFile);
+
+// External links
+router.post('/:id/links', addLink);
+router.delete('/:id/links/:linkId', deleteLink);
 
 // Comments
 router.post('/:id/comments', addComment);

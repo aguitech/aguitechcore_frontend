@@ -1,6 +1,8 @@
 import Conversation from '../models/Conversation.js';
 import Message from '../models/Message.js';
 import User from '../models/User.js';
+import fs from 'fs';
+import { validateFile, categorizeFile } from '../lib/fileGuard.js';
 
 // Helper: build a stable pair key for direct chats (sorted ids joined by ':')
 function buildPairKey(userA, userB) {
@@ -53,7 +55,7 @@ export async function listConversations(req, res, next) {
   try {
     const convs = await Conversation.find({ 'participants.user': req.user._id })
       .populate('participants.user', 'name email role')
-      .populate({ path: 'lastMessage', select: 'text sender createdAt' })
+      .populate({ path: 'lastMessage', select: 'text sender createdAt attachments' })
       .sort({ lastMessageAt: -1, updatedAt: -1 })
       .lean();
 
@@ -171,12 +173,15 @@ export async function listMessages(req, res, next) {
 }
 
 // POST /api/chat/conversations/:id/messages
-// Body: { text }
+// Body: { text }   OR   multipart/form-data with "files" + optional "text"
+// When files are sent, attachments are added to the message.
 export async function sendMessage(req, res, next) {
   try {
     const { id } = req.params;
-    const { text } = req.body;
-    if (!text || !text.trim()) return res.status(400).json({ message: 'Mensaje vacío' });
+    // text may come from JSON body OR multipart form-data field.
+    // multer populates req.body for multipart form fields too, so this works for both.
+    const text = (req.body?.text ?? '').toString();
+    const files = req.files || [];
 
     const conv = await Conversation.findOne({
       _id: id,
@@ -184,10 +189,32 @@ export async function sendMessage(req, res, next) {
     });
     if (!conv) return res.status(404).json({ message: 'Conversación no encontrada' });
 
+    if (!text.trim() && files.length === 0) {
+      return res.status(400).json({ message: 'Mensaje vacío' });
+    }
+
+    // Build attachments array from uploaded files
+    const attachments = files.map((f) => {
+      const kind = categorizeFile(f.mimetype, f.originalname); // 'image' | 'video' | 'audio' | 'pdf' | 'archive' | 'code' | 'doc' | 'design' | 'font' | 'other'
+      // Normalize to one of our three buckets
+      let normalized = 'document';
+      if (kind === 'image') normalized = 'image';
+      else if (kind === 'video') normalized = 'video';
+      else normalized = 'document';
+      return {
+        kind: normalized,
+        url: `/api/uploads/${f.filename}`,
+        filename: f.originalname,
+        mimetype: f.mimetype,
+        size: f.size,
+      };
+    });
+
     const msg = await Message.create({
       conversation: id,
       sender: req.user._id,
       text: text.trim(),
+      attachments,
     });
 
     // Update conversation's last message pointer
@@ -247,5 +274,87 @@ export async function searchUsers(req, res, next) {
       .limit(10)
       .lean();
     res.json(users);
+  } catch (err) { next(err); }
+}
+
+// === Attachment upload endpoint ===
+// Multipart endpoint to attach files to the LAST message sent by the user
+// in the conversation (or create a new message if no text is needed).
+// Body: files (multipart, field "files")
+export async function uploadAttachments(req, res, next) {
+  try {
+    const { id } = req.params;
+    const files = req.files || [];
+    if (files.length === 0) {
+      return res.status(400).json({ message: 'Sin archivos' });
+    }
+
+    const conv = await Conversation.findOne({
+      _id: id,
+      'participants.user': req.user._id,
+    });
+    if (!conv) return res.status(404).json({ message: 'Conversación no encontrada' });
+
+    // Validate each file (extension + magic bytes). Documents go through fileGuard.
+    const accepted = [];
+    const rejected = [];
+    for (const f of files) {
+      // For images/videos the multer filter already validated mimetype prefix.
+      // For "other" types (PDFs, archives, code) we re-validate with fileGuard.
+      const cat = categorizeFile(f.mimetype, f.originalname);
+      if (!['image', 'video'].includes(cat)) {
+        const check = validateFile({
+          originalname: f.originalname,
+          mimetype: f.mimetype,
+          buffer: f.buffer,
+        });
+        if (!check.ok) {
+          if (f.path) fs.unlink(f.path, () => {});
+          rejected.push({ filename: f.originalname, error: check.error });
+          continue;
+        }
+      }
+      accepted.push(f);
+    }
+
+    if (accepted.length === 0) {
+      return res.status(400).json({
+        message: 'Ningún archivo pasó la validación',
+        rejected,
+      });
+    }
+
+    const attachments = accepted.map((f) => {
+      const cat = categorizeFile(f.mimetype, f.originalname);
+      let normalized = 'document';
+      if (cat === 'image') normalized = 'image';
+      else if (cat === 'video') normalized = 'video';
+      else normalized = 'document';
+      return {
+        kind: normalized,
+        url: `/api/uploads/${f.filename}`,
+        filename: f.originalname,
+        mimetype: f.mimetype,
+        size: f.size,
+      };
+    });
+
+    // Create a new "attachment-only" message
+    const msg = await Message.create({
+      conversation: id,
+      sender: req.user._id,
+      text: '',
+      attachments,
+    });
+
+    conv.lastMessage = msg._id;
+    conv.lastMessageAt = msg.createdAt;
+    await conv.save();
+
+    const populated = await Message.findById(msg._id)
+      .populate('sender', 'name email role')
+      .lean();
+
+    res.status(201).json({ message: populated, rejected });
   } catch (err) { next(err); }
 }

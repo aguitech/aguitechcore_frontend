@@ -25,16 +25,10 @@ function formatMessageTime(iso) {
 }
 
 // Normalize a sender reference to its string id.
-// `sender` can come back from the API as:
-//   - a populated object:  { _id: 'abc', name, email, role }
-//   - a plain string id:   'abc'
-//   - an ObjectId-shaped object: { _id: ObjectId('abc'), ... }
-// We always coerce to string so the equality check is reliable.
 function getSenderId(sender) {
   if (!sender) return '';
   if (typeof sender === 'string') return sender;
   if (typeof sender === 'object') {
-    // ObjectId has toString() that returns the hex id
     if (sender._id && typeof sender._id === 'object' && sender._id.toString) {
       return sender._id.toString();
     }
@@ -46,7 +40,203 @@ function getSenderId(sender) {
   return '';
 }
 
+function fmtSize(b) {
+  if (!b) return '';
+  if (b < 1024) return `${b} B`;
+  if (b < 1024 * 1024) return `${(b / 1024).toFixed(1)} KB`;
+  if (b < 1024 * 1024 * 1024) return `${(b / 1024 / 1024).toFixed(1)} MB`;
+  return `${(b / 1024 / 1024 / 1024).toFixed(1)} GB`;
+}
+
+function fileIcon(filename) {
+  const ext = (filename?.split('.').pop() || '').toLowerCase();
+  if (['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg', 'bmp'].includes(ext)) return '🖼️';
+  if (['mp4', 'webm', 'mov', 'avi', 'mkv'].includes(ext)) return '🎬';
+  if (['mp3', 'wav', 'ogg', 'flac', 'm4a'].includes(ext)) return '🎵';
+  if (ext === 'pdf') return '📕';
+  if (['zip', 'rar', '7z', 'tar', 'gz'].includes(ext)) return '📦';
+  if (['doc', 'docx', 'odt'].includes(ext)) return '📃';
+  if (['xls', 'xlsx', 'ods', 'csv'].includes(ext)) return '📊';
+  if (['ppt', 'pptx', 'odp'].includes(ext)) return '📽️';
+  if (['js', 'jsx', 'ts', 'tsx', 'html', 'css', 'json', 'xml', 'yml', 'yaml', 'md', 'py', 'java', 'c', 'cpp', 'go', 'rs', 'php', 'rb', 'sh', 'sql', 'txt'].includes(ext)) return '📄';
+  return '📎';
+}
+
 const PAGE_SIZE = 20;
+
+// Render the attachments array of a single message as JSX
+function MessageAttachments({ attachments, isMine }) {
+  if (!attachments || attachments.length === 0) return null;
+  const images = attachments.filter((a) => a.kind === 'image');
+  const videos = attachments.filter((a) => a.kind === 'video');
+  const docs = attachments.filter((a) => a.kind === 'document');
+
+  return (
+    <div className="msg-attachments" style={{ marginTop: 6, display: 'flex', flexDirection: 'column', gap: 6 }}>
+      {images.length > 0 && (
+        <div className="msg-image-grid" style={{
+          display: 'grid',
+          gridTemplateColumns: images.length === 1 ? '1fr' : 'repeat(2, 1fr)',
+          gap: 4,
+          maxWidth: 320,
+        }}>
+          {images.map((img, i) => (
+            <a
+              key={i}
+              href={img.url}
+              target="_blank"
+              rel="noreferrer noopener"
+              style={{ display: 'block', borderRadius: 6, overflow: 'hidden', background: '#000' }}
+            >
+              <img
+                src={img.url}
+                alt={img.filename}
+                style={{ width: '100%', maxHeight: 240, objectFit: 'cover', display: 'block' }}
+              />
+            </a>
+          ))}
+        </div>
+      )}
+      {videos.map((v, i) => (
+        <video
+          key={i}
+          src={v.url}
+          controls
+          preload="metadata"
+          style={{ maxWidth: 320, maxHeight: 280, borderRadius: 6, display: 'block' }}
+        />
+      ))}
+      {docs.length > 0 && (
+        <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'flex', flexDirection: 'column', gap: 4 }}>
+          {docs.map((d, i) => (
+            <li
+              key={i}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 8,
+                padding: '6px 10px',
+                background: isMine ? 'rgba(255,255,255,0.15)' : 'rgba(255,255,255,0.05)',
+                borderRadius: 6,
+                minWidth: 200,
+                maxWidth: 340,
+              }}
+            >
+              <span style={{ fontSize: '1.4em' }}>{fileIcon(d.filename)}</span>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div
+                  style={{
+                    fontSize: '0.9em',
+                    fontWeight: 500,
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    whiteSpace: 'nowrap',
+                  }}
+                  title={d.filename}
+                >
+                  {d.filename}
+                </div>
+                <div style={{ fontSize: '0.75em', opacity: 0.75 }}>{fmtSize(d.size)}</div>
+              </div>
+              <a
+                href={d.url}
+                download={d.filename}
+                target="_blank"
+                rel="noreferrer noopener"
+                title="Descargar"
+                style={{ color: 'inherit', textDecoration: 'none', fontSize: '1.1em' }}
+              >
+                ⬇
+              </a>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+// File-chip showing a file staged before sending
+function StagedFileChip({ file, onRemove }) {
+  const isImage = file.type?.startsWith('image/');
+  const isVideo = file.type?.startsWith('video/');
+  const previewUrl = isImage ? URL.createObjectURL(file) : null;
+
+  // Free the object URL when this chip unmounts
+  useEffect(() => {
+    if (!previewUrl) return undefined;
+    return () => URL.revokeObjectURL(previewUrl);
+  }, [previewUrl]);
+
+  return (
+    <div
+      style={{
+        position: 'relative',
+        display: 'inline-flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        background: 'var(--bg-2, #181818)',
+        border: '1px solid var(--border, #2a2a2a)',
+        borderRadius: 8,
+        padding: 4,
+        minWidth: 70,
+        maxWidth: 110,
+        overflow: 'hidden',
+      }}
+    >
+      {isImage ? (
+        <img src={previewUrl} alt={file.name} style={{ width: '100%', height: 70, objectFit: 'cover', borderRadius: 4 }} />
+      ) : isVideo ? (
+        <div style={{ width: '100%', height: 70, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.8em' }}>🎬</div>
+      ) : (
+        <div style={{ width: '100%', height: 70, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', fontSize: '1.6em', padding: 4 }}>
+          <span>{fileIcon(file.name)}</span>
+          <span style={{ fontSize: '0.7em', color: 'var(--muted)', marginTop: 2, textAlign: 'center', wordBreak: 'break-all' }}>
+            {(file.name.split('.').pop() || '').toUpperCase()}
+          </span>
+        </div>
+      )}
+      <div
+        style={{
+          fontSize: '0.7em',
+          color: 'var(--muted)',
+          marginTop: 2,
+          maxWidth: '100%',
+          overflow: 'hidden',
+          textOverflow: 'ellipsis',
+          whiteSpace: 'nowrap',
+        }}
+        title={file.name}
+      >
+        {file.name}
+      </div>
+      <button
+        type="button"
+        onClick={onRemove}
+        title="Quitar"
+        style={{
+          position: 'absolute',
+          top: 2,
+          right: 2,
+          background: 'rgba(0,0,0,0.65)',
+          color: '#fff',
+          border: 'none',
+          borderRadius: '50%',
+          width: 18,
+          height: 18,
+          cursor: 'pointer',
+          fontSize: 12,
+          lineHeight: 1,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+        }}
+      >
+        ×
+      </button>
+    </div>
+  );
+}
 
 export default function Chat() {
   const { user: currentUser } = useAuth();
@@ -65,10 +255,15 @@ export default function Chat() {
   const [searchResults, setSearchResults] = useState([]);
   const [error, setError] = useState('');
 
+  // Attachments staged for the next message
+  const [stagedFiles, setStagedFiles] = useState([]);
+  const [dragOver, setDragOver] = useState(false);
+
   const messagesEndRef = useRef(null);
   const messagesTopRef = useRef(null);
   const messagesContainerRef = useRef(null);
   const inputRef = useRef(null);
+  const fileInputRef = useRef(null);
   const previousScrollHeight = useRef(0);
 
   // ============== Load conversations ==============
@@ -115,6 +310,7 @@ export default function Chat() {
       setMessages([]);
       setHasMore(false);
       setNextCursor(null);
+      setStagedFiles([]);
       loadMessages(activeId, null);
       // Mark as read
       api.post(`/chat/conversations/${activeId}/read`).catch(() => {});
@@ -124,9 +320,6 @@ export default function Chat() {
   }, [activeId, loadMessages]);
 
   // ============== Polling: detect new messages in real time ==============
-  // Every 4 seconds, check if the active conversation has new messages.
-  // If yes, fetch only the new ones (after the last known message timestamp)
-  // and append to the list. Also refresh conversation list for unread badges.
   const lastMessageTimestampRef = useRef(null);
   useEffect(() => { lastMessageTimestampRef.current = null; }, [activeId]);
 
@@ -135,33 +328,27 @@ export default function Chat() {
     let cancelled = false;
     const tick = async () => {
       try {
-        // 1) Refresh conversation list (so unread badges update)
         const convRes = await api.get('/chat/conversations');
         if (cancelled) return;
         setConversations(convRes.data);
-        // 2) Fetch only messages after the last known timestamp
         const since = lastMessageTimestampRef.current;
         const params = { limit: 50, since: since || '' };
         const { data } = await api.get(`/chat/conversations/${activeId}/messages`, { params });
         if (cancelled) return;
         if (data.messages && data.messages.length > 0) {
           setMessages((prev) => {
-            // Dedupe by _id in case some were already loaded
             const known = new Set(prev.map((m) => String(m._id)));
             const fresh = data.messages.filter((m) => !known.has(String(m._id)));
             if (fresh.length === 0) return prev;
             return [...prev, ...fresh];
           });
-          // Update the timestamp cursor to the latest message
           const latest = data.messages[data.messages.length - 1];
           if (latest?.createdAt) lastMessageTimestampRef.current = latest.createdAt;
         }
       } catch (err) {
-        // Silent: polling failures shouldn't bother the user
         console.warn('poll tick failed', err.message);
       }
     };
-    // Run every 4 seconds
     const interval = setInterval(tick, 4000);
     return () => {
       cancelled = true;
@@ -169,7 +356,6 @@ export default function Chat() {
     };
   }, [activeId]);
 
-  // Update the timestamp cursor whenever messages change (covers local sends)
   useEffect(() => {
     if (messages.length > 0) {
       const latest = messages[messages.length - 1];
@@ -178,10 +364,6 @@ export default function Chat() {
   }, [messages]);
 
   // ============== Auto-scroll to bottom on new messages ==============
-  // When the conversation first opens (after messages are loaded), force-scroll to the
-  // very bottom so the user sees the latest message right away. For subsequent updates,
-  // only auto-scroll if the user is already near the bottom (don't yank them away from
-  // older messages they're reading).
   const isFirstLoadRef = useRef(true);
   useEffect(() => { isFirstLoadRef.current = true; }, [activeId]);
   useEffect(() => {
@@ -189,11 +371,9 @@ export default function Chat() {
       const c = messagesContainerRef.current;
       if (!c) return;
       if (isFirstLoadRef.current) {
-        // Force scroll to bottom on first load of a conversation
         messagesEndRef.current.scrollIntoView({ behavior: 'auto' });
         isFirstLoadRef.current = false;
       } else {
-        // Only auto-scroll when user is near bottom (within 200px)
         const isNearBottom = c.scrollHeight - c.scrollTop - c.clientHeight < 200;
         if (isNearBottom) {
           messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
@@ -202,7 +382,6 @@ export default function Chat() {
     }
   }, [messages]);
 
-  // After loading older messages, restore scroll position
   useEffect(() => {
     if (loadingMore === false && previousScrollHeight.current && messagesContainerRef.current) {
       const c = messagesContainerRef.current;
@@ -221,18 +400,69 @@ export default function Chat() {
     }
   }, [hasMore, loadingMore, nextCursor, activeId, loadMessages]);
 
+  // ============== Staging attachments ==============
+  function addFilesToStage(fileList) {
+    if (!fileList || fileList.length === 0) return;
+    // Max 20 files per message (server limit). 50 MB per file.
+    setStagedFiles((prev) => {
+      const next = [...prev];
+      for (const f of fileList) {
+        if (next.length >= 20) break;
+        if (f.size > 50 * 1024 * 1024) {
+          setError(`"${f.name}" excede 50 MB`);
+          setTimeout(() => setError(''), 3500);
+          continue;
+        }
+        next.push(f);
+      }
+      return next;
+    });
+  }
+
+  function onPickFiles(e) {
+    const files = Array.from(e.target.files || []);
+    addFilesToStage(files);
+    e.target.value = '';
+  }
+
+  function onDropFiles(e) {
+    e.preventDefault();
+    setDragOver(false);
+    const files = Array.from(e.dataTransfer.files || []);
+    addFilesToStage(files);
+  }
+
+  function removeStaged(idx) {
+    setStagedFiles((prev) => prev.filter((_, i) => i !== idx));
+  }
+
+  function clearStaged() {
+    setStagedFiles([]);
+  }
+
   // ============== Send a message ==============
   async function sendMessage(e) {
     e?.preventDefault();
-    if (!text.trim() || !activeId || sending) return;
+    if ((!text.trim() && stagedFiles.length === 0) || !activeId || sending) return;
     setSending(true);
+    setError('');
     try {
-      const { data: msg } = await api.post(`/chat/conversations/${activeId}/messages`, { text });
-      setMessages(prev => [...prev, msg]);
+      let res;
+      if (stagedFiles.length > 0) {
+        // Multipart: text + files
+        const fd = new FormData();
+        if (text.trim()) fd.append('text', text.trim());
+        for (const f of stagedFiles) fd.append('files', f);
+        res = await api.post(`/chat/conversations/${activeId}/messages`, fd, {
+          headers: { 'Content-Type': 'multipart/form-data' },
+        });
+      } else {
+        res = await api.post(`/chat/conversations/${activeId}/messages`, { text });
+      }
+      setMessages(prev => [...prev, res.data]);
       setText('');
-      // Update conversation list (move to top + new preview)
+      clearStaged();
       await loadConversations();
-      // Auto-scroll
       setTimeout(() => {
         messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
       }, 50);
@@ -270,11 +500,12 @@ export default function Chat() {
   // ============== Helpers for rendering ==============
   const activeConv = conversations.find(c => c._id === activeId);
   const activeOther = activeConv?.other;
+  const canSend = (text.trim() || stagedFiles.length > 0) && !sending;
 
   return (
     <Layout>
       <div className={`chat-page ${activeId ? 'has-active' : ''}`}>
-        {/* ============ LEFT PANEL: Conversations list ============ */}
+        {/* ============ LEFT PANEL ============ */}
         <aside className="chat-sidebar">
           <header className="chat-sidebar-head">
             <div>
@@ -345,7 +576,7 @@ export default function Chat() {
                     </div>
                     <div className="conv-row2">
                       <span className="conv-preview">
-                        {c.lastMessage?.text || (c.lastMessage ? '' : 'Sin mensajes aún')}
+                        {c.lastMessage?.text || (c.lastMessage?.attachments?.length ? `📎 ${c.lastMessage.attachments.length} adjunto(s)` : (c.lastMessage ? '' : 'Sin mensajes aún'))}
                       </span>
                       {c.unreadCount > 0 && (
                         <span className="badge">{c.unreadCount}</span>
@@ -391,10 +622,34 @@ export default function Chat() {
               </header>
 
               <div
-                className="chat-messages"
+                className={`chat-messages ${dragOver ? 'drag-over' : ''}`}
                 ref={messagesContainerRef}
                 onScroll={handleScroll}
+                onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
+                onDragLeave={() => setDragOver(false)}
+                onDrop={onDropFiles}
               >
+                {dragOver && (
+                  <div
+                    style={{
+                      position: 'absolute',
+                      inset: 0,
+                      background: 'rgba(255,106,0,0.10)',
+                      border: '2px dashed #FF6A00',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      color: '#FF6A00',
+                      fontWeight: 600,
+                      fontSize: '1.1em',
+                      pointerEvents: 'none',
+                      zIndex: 5,
+                    }}
+                  >
+                    Suelta aquí para adjuntar
+                  </div>
+                )}
+
                 {loadingMsgs ? (
                   <p className="muted center" style={{ padding: '2rem' }}>Cargando mensajes...</p>
                 ) : messages.length === 0 ? (
@@ -416,6 +671,7 @@ export default function Chat() {
                       const isMine = senderId && myId && senderId === myId;
                       const prev = messages[i - 1];
                       const showAvatar = !isMine && (!prev || getSenderId(prev.sender) !== senderId);
+                      const hasAttachments = m.attachments && m.attachments.length > 0;
                       return (
                         <div
                           key={m._id}
@@ -425,7 +681,8 @@ export default function Chat() {
                             <div className="avatar-xs">{m.sender.name?.[0]?.toUpperCase()}</div>
                           )}
                           <div className="msg-content">
-                            <div className="msg-text">{m.text}</div>
+                            {m.text && <div className="msg-text">{m.text}</div>}
+                            {hasAttachments && <MessageAttachments attachments={m.attachments} isMine={isMine} />}
                             <div className="msg-time">{formatMessageTime(m.createdAt)}</div>
                           </div>
                         </div>
@@ -436,11 +693,59 @@ export default function Chat() {
                 )}
               </div>
 
+              {stagedFiles.length > 0 && (
+                <div
+                  style={{
+                    padding: '8px 12px',
+                    background: 'var(--bg-2, #181818)',
+                    borderTop: '1px solid var(--border, #2a2a2a)',
+                    display: 'flex',
+                    flexWrap: 'wrap',
+                    gap: 6,
+                    alignItems: 'center',
+                    maxHeight: 140,
+                    overflowY: 'auto',
+                  }}
+                >
+                  <span style={{ fontSize: '0.8em', color: 'var(--muted)', marginRight: 4 }}>
+                    Adjuntos ({stagedFiles.length}):
+                  </span>
+                  {stagedFiles.map((f, i) => (
+                    <StagedFileChip key={i} file={f} onRemove={() => removeStaged(i)} />
+                  ))}
+                  <button
+                    type="button"
+                    onClick={clearStaged}
+                    className="ghost small"
+                    style={{ marginLeft: 'auto' }}
+                  >
+                    Quitar todos
+                  </button>
+                </div>
+              )}
+
               <form className="chat-input" onSubmit={sendMessage}>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  multiple
+                  style={{ display: 'none' }}
+                  onChange={onPickFiles}
+                />
+                <button
+                  type="button"
+                  className="ghost"
+                  onClick={() => fileInputRef.current?.click()}
+                  title="Adjuntar foto, video o archivo"
+                  disabled={sending}
+                  style={{ fontSize: '1.2em', padding: '6px 10px' }}
+                >
+                  📎
+                </button>
                 <input
                   ref={inputRef}
                   type="text"
-                  placeholder="Escribe un mensaje..."
+                  placeholder={stagedFiles.length > 0 ? 'Añade un texto (opcional) y envía…' : 'Escribe un mensaje...'}
                   value={text}
                   onChange={(e) => setText(e.target.value)}
                   disabled={sending}
@@ -449,7 +754,7 @@ export default function Chat() {
                 <button
                   type="submit"
                   className="primary"
-                  disabled={!text.trim() || sending}
+                  disabled={!canSend}
                 >
                   {sending ? '...' : '➤'}
                 </button>
