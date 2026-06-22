@@ -13,6 +13,7 @@ import Client from '../models/Client.js';
 import User from '../models/User.js';
 import Conversation from '../models/Conversation.js';
 import Message from '../models/Message.js';
+import { Post, BlogCategory } from '../models/Post.js';
 import { validateAssignee } from './assigneeValidator.js';
 import { buildProjectReportPdf } from './pdfReport.js';
 
@@ -765,6 +766,343 @@ const tools = [
       email: user.email,
       role: user.role,
     }),
+  },
+
+  // ===== BLOG — CATEGORIES =====
+  {
+    name: 'list_blog_categories',
+    description: 'Lista todas las categorías del blog con su conteo de publicaciones. Cualquier usuario autenticado puede verlas.',
+    inputSchema: { type: 'object', properties: {}, additionalProperties: false },
+    handler: async () => {
+      const cats = await BlogCategory.find().sort({ name: 1 }).lean();
+      const counts = await Post.aggregate([
+        { $group: { _id: '$category', count: { $sum: 1 } } },
+      ]);
+      const map = new Map(counts.map((c) => [String(c._id), c.count]));
+      return cats.map((c) => ({ ...c, postCount: map.get(String(c._id)) || 0 }));
+    },
+  },
+
+  {
+    name: 'create_blog_category',
+    description: 'Crea una nueva categoría para el blog. Requiere permisos de admin.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        name: { type: 'string', description: 'Nombre de la categoría (requerido, único)' },
+        description: { type: 'string', description: 'Descripción corta (opcional)' },
+        color: { type: 'string', description: 'Color en hex, ej. #FF6A00' },
+        icon: { type: 'string', description: 'Emoji o ícono, ej. 📰' },
+      },
+      required: ['name'],
+      additionalProperties: false,
+    },
+    handler: async (user, { name, description, color, icon }) => {
+      if (user.role !== 'admin') {
+        throw Object.assign(new Error('Solo admin puede crear categorías'), { status: 403 });
+      }
+      const slugBase = (name || '')
+        .toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+        .replace(/[^a-z0-9\s-]/g, '').trim().replace(/\s+/g, '-').slice(0, 120);
+      let candidate = slugBase || 'categoria';
+      let n = 1;
+      while (await BlogCategory.findOne({ slug: candidate }).select('_id').lean()) {
+        n += 1;
+        candidate = `${slugBase}-${n}`;
+      }
+      const cat = await BlogCategory.create({
+        name: name.trim(),
+        slug: candidate,
+        description: (description || '').trim(),
+        color: color || '#FF6A00',
+        icon: icon || '📝',
+        createdBy: user._id,
+      });
+      return { id: cat._id, name: cat.name, slug: cat.slug, color: cat.color, icon: cat.icon };
+    },
+  },
+
+  // ===== BLOG — POSTS =====
+  {
+    name: 'list_blog_posts',
+    description: 'Lista las publicaciones del blog. Por defecto solo muestra las publicadas. Cualquier usuario autenticado puede listar.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        status: { type: 'string', enum: ['borrador', 'publicado'], description: 'Filtrar por estado' },
+        category: { type: 'string', description: 'ID o slug de categoría' },
+        q: { type: 'string', description: 'Búsqueda por texto en título/excerpt' },
+        limit: { type: 'integer', description: 'Máx resultados (default 20, max 100)' },
+        skip: { type: 'integer', description: 'Paginación' },
+      },
+      additionalProperties: false,
+    },
+    handler: async (_user, { status, category, q, limit = 20, skip = 0 }) => {
+      const filter = {};
+      if (status) filter.status = status;
+      if (category) {
+        if (/^[0-9a-f]{24}$/i.test(category)) filter.category = category;
+        else {
+          const c = await BlogCategory.findOne({ slug: category }).select('_id').lean();
+          if (!c) return { items: [], total: 0 };
+          filter.category = c._id;
+        }
+      }
+      if (q) {
+        const rx = new RegExp(q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
+        filter.$or = [{ title: rx }, { excerpt: rx }];
+      }
+      const lim = Math.min(limit, 100);
+      const [items, total] = await Promise.all([
+        Post.find(filter)
+          .sort({ publishedAt: -1, createdAt: -1 })
+          .skip(skip).limit(lim)
+          .populate('category', 'name slug color icon')
+          .populate('author', 'name email')
+          .lean(),
+        Post.countDocuments(filter),
+      ]);
+      return {
+        total,
+        items: items.map((p) => ({
+          id: p._id, slug: p.slug, title: p.title, excerpt: p.excerpt,
+          status: p.status, publishedAt: p.publishedAt, createdAt: p.createdAt,
+          coverImage: p.coverImage, views: p.views,
+          category: p.category, author: p.author,
+          tagCount: (p.tags || []).length,
+          imageCount: (p.images || []).length,
+          videoCount: (p.videos || []).length,
+          documentCount: (p.documents || []).length,
+          linkCount: (p.links || []).length,
+          commentCount: (p.comments || []).length,
+        })),
+      };
+    },
+  },
+
+  {
+    name: 'get_blog_post',
+    description: 'Obtiene el detalle completo de una publicación del blog (incluye imágenes, videos, documentos, links y comentarios).',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        post_id: { type: 'string', description: 'ID de la publicación' },
+        slug: { type: 'string', description: 'Slug público de la publicación' },
+      },
+      additionalProperties: false,
+    },
+    handler: async (_user, { post_id, slug }) => {
+      let post;
+      if (post_id) post = await Post.findById(post_id);
+      else if (slug) post = await Post.findOne({ slug });
+      if (!post) throw Object.assign(new Error('Publicación no encontrada'), { status: 404 });
+      const populated = await Post.findById(post._id)
+        .populate('category', 'name slug color icon')
+        .populate('author', 'name email')
+        .populate('comments.author', 'name email')
+        .lean();
+      return populated;
+    },
+  },
+
+  {
+    name: 'create_blog_post',
+    description: 'Crea una nueva publicación en el blog. Cualquier usuario autenticado puede crear. Retorna la publicación creada con su ID y slug. Para adjuntar imágenes/videos/documentos usa REST con JWT (ver upload_task_image.py como referencia del patrón).',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        title: { type: 'string', description: 'Título de la publicación (requerido)' },
+        excerpt: { type: 'string', description: 'Resumen corto (max 500)' },
+        body: { type: 'string', description: 'Contenido completo / nota' },
+        category: { type: 'string', description: 'ID de la categoría (requerido)' },
+        tags: { type: 'array', items: { type: 'string' }, description: 'Etiquetas' },
+        status: { type: 'string', enum: ['borrador', 'publicado'], description: 'Default: borrador' },
+        cover_image_url: { type: 'string', description: 'URL de la imagen de portada (opcional, también puedes subirla con REST después)' },
+        links: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              url: { type: 'string' },
+              title: { type: 'string' },
+              description: { type: 'string' },
+            },
+            required: ['url'],
+          },
+          description: 'Links externos',
+        },
+      },
+      required: ['title', 'category'],
+      additionalProperties: false,
+    },
+    handler: async (user, { title, excerpt, body, category, tags, status, cover_image_url, links }) => {
+      if (!title || !title.trim()) throw Object.assign(new Error('Título requerido'), { status: 400 });
+      if (!category || !/^[0-9a-f]{24}$/i.test(category)) {
+        throw Object.assign(new Error('ID de categoría requerido'), { status: 400 });
+      }
+      const cat = await BlogCategory.findById(category).select('_id').lean();
+      if (!cat) throw Object.assign(new Error('Categoría inválida'), { status: 400 });
+
+      const slugBase = Post.slugify(title);
+      let candidate = slugBase;
+      let n = 1;
+      while (await Post.findOne({ slug: candidate }).select('_id').lean()) {
+        n += 1;
+        candidate = `${slugBase}-${n}`;
+      }
+      const post = await Post.create({
+        title: title.trim(),
+        slug: candidate,
+        excerpt: (excerpt || '').trim().slice(0, 500),
+        body: body || '',
+        category: cat._id,
+        tags: Array.isArray(tags) ? tags.map((t) => String(t).trim()).filter(Boolean) : [],
+        status: status === 'publicado' ? 'publicado' : 'borrador',
+        publishedAt: status === 'publicado' ? new Date() : null,
+        coverImage: cover_image_url || '',
+        links: Array.isArray(links)
+          ? links.filter((l) => l && l.url).map((l) => ({
+              url: String(l.url).trim(),
+              title: (l.title || '').trim(),
+              description: (l.description || '').trim().slice(0, 500),
+              addedBy: user._id,
+            }))
+          : [],
+        author: user._id,
+      });
+      const populated = await Post.findById(post._id)
+        .populate('category', 'name slug color icon')
+        .populate('author', 'name email')
+        .lean();
+      return {
+        id: populated._id,
+        slug: populated.slug,
+        title: populated.title,
+        status: populated.status,
+        publishedAt: populated.publishedAt,
+        publicUrl: `https://sxxysecret.com/public/blog/${populated.slug}`,
+        coverImage: populated.coverImage,
+        category: populated.category,
+        author: populated.author,
+        linkCount: (populated.links || []).length,
+        message: 'Publicación creada. Para adjuntar imágenes/videos/documentos usa REST con JWT en /api/blog/posts/<id>/{images,videos,documents}.',
+      };
+    },
+  },
+
+  {
+    name: 'update_blog_post',
+    description: 'Actualiza una publicación existente. Cualquier usuario autenticado puede editar.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        post_id: { type: 'string', description: 'ID de la publicación (requerido)' },
+        title: { type: 'string' },
+        excerpt: { type: 'string' },
+        body: { type: 'string' },
+        category: { type: 'string' },
+        tags: { type: 'array', items: { type: 'string' } },
+        status: { type: 'string', enum: ['borrador', 'publicado'] },
+        cover_image_url: { type: 'string' },
+        links: { type: 'array' },
+      },
+      required: ['post_id'],
+      additionalProperties: false,
+    },
+    handler: async (user, { post_id, title, excerpt, body, category, tags, status, cover_image_url, links }) => {
+      const post = await Post.findById(post_id);
+      if (!post) throw Object.assign(new Error('Publicación no encontrada'), { status: 404 });
+      if (title !== undefined) post.title = title.trim();
+      if (title && Post.slugify(title) !== post.slug) {
+        const base = Post.slugify(title);
+        let candidate = base; let n = 1;
+        while (await Post.findOne({ slug: candidate, _id: { $ne: post._id } }).select('_id').lean()) {
+          n += 1; candidate = `${base}-${n}`;
+        }
+        post.slug = candidate;
+      }
+      if (excerpt !== undefined) post.excerpt = excerpt.trim();
+      if (body !== undefined) post.body = body;
+      if (cover_image_url !== undefined) post.coverImage = cover_image_url;
+      if (category !== undefined) {
+        const cat = await BlogCategory.findById(category).select('_id').lean();
+        if (!cat) throw Object.assign(new Error('Categoría inválida'), { status: 400 });
+        post.category = cat._id;
+      }
+      if (tags !== undefined) post.tags = tags.map((t) => String(t).trim()).filter(Boolean);
+      if (links !== undefined) {
+        post.links = links.filter((l) => l && l.url).map((l) => ({
+          url: String(l.url).trim(),
+          title: (l.title || '').trim(),
+          description: (l.description || '').trim().slice(0, 500),
+          addedBy: user._id,
+        }));
+      }
+      if (status !== undefined) {
+        const prev = post.status;
+        post.status = status;
+        if (post.status === 'publicado' && prev !== 'publicado') post.publishedAt = new Date();
+        if (post.status === 'borrador') post.publishedAt = null;
+      }
+      await post.save();
+      return { id: post._id, slug: post.slug, status: post.status, publicUrl: `https://sxxysecret.com/public/blog/${post.slug}` };
+    },
+  },
+
+  {
+    name: 'add_blog_post_link',
+    description: 'Agrega un link externo (URL) a una publicación del blog.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        post_id: { type: 'string', description: 'ID de la publicación' },
+        url: { type: 'string', description: 'URL del link (requerido, http/https)' },
+        title: { type: 'string' },
+        description: { type: 'string', maxLength: 500 },
+      },
+      required: ['post_id', 'url'],
+      additionalProperties: false,
+    },
+    handler: async (user, { post_id, url, title, description }) => {
+      if (!url || !url.trim()) throw Object.assign(new Error('URL requerida'), { status: 400 });
+      const post = await Post.findById(post_id);
+      if (!post) throw Object.assign(new Error('Publicación no encontrada'), { status: 404 });
+      post.links.push({
+        url: url.trim(),
+        title: (title || '').trim(),
+        description: (description || '').trim().slice(0, 500),
+        addedBy: user._id,
+      });
+      await post.save();
+      return { id: post._id, linkCount: post.links.length };
+    },
+  },
+
+  {
+    name: 'add_blog_post_comment',
+    description: 'Agrega una nota o comentario a una publicación del blog. Solo texto (sin adjuntos).',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        post_id: { type: 'string' },
+        text: { type: 'string', description: 'Texto del comentario / nota (requerido)' },
+      },
+      required: ['post_id', 'text'],
+      additionalProperties: false,
+    },
+    handler: async (user, { post_id, text }) => {
+      if (!text || !text.trim()) throw Object.assign(new Error('Comentario vacío'), { status: 400 });
+      const post = await Post.findById(post_id);
+      if (!post) throw Object.assign(new Error('Publicación no encontrada'), { status: 404 });
+      post.comments.push({
+        text: text.trim().slice(0, 2000),
+        author: user._id,
+        authorName: user.name || user.email,
+      });
+      await post.save();
+      const c = post.comments[post.comments.length - 1];
+      return { id: c._id, text: c.text, author: { name: user.name, email: user.email }, createdAt: c.createdAt };
+    },
   },
 ];
 

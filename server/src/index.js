@@ -13,6 +13,7 @@ import apikeyRoutes from './routes/apikey.routes.js';
 import userRoutes from './routes/user.routes.js';
 import chatRoutes from './routes/chat.routes.js';
 import mcpRoutes from './routes/mcp.routes.js';
+import postRoutes from './routes/post.routes.js';
 import { errorHandler } from './middleware/error.js';
 
 dotenv.config();
@@ -38,6 +39,7 @@ app.use('/api/profile/apikeys', apikeyRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/chat', chatRoutes);
 app.use('/api/mcp', mcpRoutes);
+app.use('/api/blog', postRoutes);
 
 app.use(errorHandler);
 

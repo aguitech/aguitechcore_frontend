@@ -11,6 +11,9 @@ import Tasks from './pages/Tasks.jsx';
 import Calendar from './pages/Calendar.jsx';
 import Profile from './pages/Profile.jsx';
 import Chat from './pages/Chat.jsx';
+import Blog from './pages/Blog.jsx';
+import { PublicBlogList, PublicBlogPost } from './pages/PublicBlog.jsx';
+import './styles/public.css';
 
 function PrivateRoute({ children }) {
   const { user, loading } = useAuth();
@@ -33,6 +36,10 @@ export default function App() {
         <Route path="/calendar" element={<PrivateRoute><Calendar /></PrivateRoute>} />
         <Route path="/chat" element={<PrivateRoute><Chat /></PrivateRoute>} />
         <Route path="/profile" element={<PrivateRoute><Profile /></PrivateRoute>} />
+        <Route path="/blog" element={<PrivateRoute><Blog /></PrivateRoute>} />
+        {/* Public blog — no auth required */}
+        <Route path="/public/blog" element={<PublicBlogList />} />
+        <Route path="/public/blog/:slug" element={<PublicBlogPost />} />
         <Route path="*" element={<Navigate to="/dashboard" />} />
       </Routes>
     </ErrorBoundary>

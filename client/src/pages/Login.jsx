@@ -38,6 +38,11 @@ export default function Login() {
         </label>
         <button type="submit" disabled={loading}>{loading ? 'Entrando...' : 'Entrar'}</button>
         <p className="muted small">Demo: admin@aguittech.com / admin123</p>
+        <p style={{ textAlign: 'center', marginTop: 12 }}>
+          <Link to="/public/blog" style={{ color: 'var(--accent, #FF6A00)', textDecoration: 'none' }}>
+            📰 Leer el blog público
+          </Link>
+        </p>
       </form>
     </div>
   );

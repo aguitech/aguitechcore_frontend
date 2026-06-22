@@ -24,6 +24,22 @@ export default function Dashboard() {
         </div>
       </header>
 
+      <div className="blog-cta">
+        <div>
+          <h3>📰 Blog público</h3>
+          <p className="muted">
+            Crea publicaciones con imágenes, videos, documentos y notas. Todo lo que publiques aquí
+            aparece automáticamente en el sitio web público.
+          </p>
+        </div>
+        <div className="blog-cta-actions">
+          <Link to="/blog" className="btn primary">Administrar blog</Link>
+          <a href="/public/blog" target="_blank" rel="noreferrer" className="btn ghost">
+            Ver sitio público ↗
+          </a>
+        </div>
+      </div>
+
       <div className="kpis">
         <Kpi label="Total proyectos" value={stats.total} />
         <Kpi label="Activos" value={stats.activos} color="#22c55e" />

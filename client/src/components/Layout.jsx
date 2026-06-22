@@ -9,6 +9,7 @@ const NAV_BASE = [
   { to: '/tasks', label: 'Tareas', icon: '✅' },
   { to: '/calendar', label: 'Calendario', icon: '📅' },
   { to: '/chat', label: 'Chat', icon: '💬' },
+  { to: '/blog', label: 'Blog', icon: '📰' },
 ];
 
 const NAV_ADMIN = { to: '/users', label: 'Usuarios', icon: '👤' };
