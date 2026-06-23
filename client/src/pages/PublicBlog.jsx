@@ -127,7 +127,7 @@ export function PublicBlogList() {
 
       <div className="public-grid">
         {posts.map((p) => (
-          <Link key={p._id} to={`/blog/${p.slug}`} className="public-card">
+          <Link key={p._id} to={`/public/blog/${p.slug}`} className="public-card">
             {p.coverImage ? (
               <div className="public-card-cover" style={{ backgroundImage: `url(${p.coverImage})` }} />
             ) : (
@@ -411,7 +411,7 @@ function PublicShell({ children }) {
           <span>Aguitech</span>
         </Link>
         <nav className="public-nav">
-          <Link to="/blog" className="navlink">Blog</Link>
+          <Link to="/public/blog" className="navlink">Blog</Link>
           <a href="https://sxxysecret.com/dashboard" className="navlink">Iniciar sesión</a>
         </nav>
       </header>
