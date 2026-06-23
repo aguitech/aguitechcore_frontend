@@ -39,7 +39,9 @@ export default function App() {
         <Route path="/blog" element={<PrivateRoute><Blog /></PrivateRoute>} />
         {/* Public blog — no auth required */}
         <Route path="/public/blog" element={<PublicBlogList />} />
+        <Route path="/public/blog/" element={<PublicBlogList />} />
         <Route path="/public/blog/:slug" element={<PublicBlogPost />} />
+        <Route path="/public/blog/:slug/" element={<PublicBlogPost />} />
         <Route path="*" element={<Navigate to="/dashboard" />} />
       </Routes>
     </ErrorBoundary>
