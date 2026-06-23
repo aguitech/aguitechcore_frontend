@@ -99,6 +99,8 @@ function persistMemoryFiles(req, _res, next) {
 // Mounted before requireAuth so anyone can read published posts.
 router.get('/public/posts', listPublicPosts);
 router.get('/public/posts/:slug', getPublicPostBySlug);
+// Categories are shown on the public blog listing — must be reachable without auth.
+router.get('/categories', listCategories);
 
 // ====== AUTHENTICATED ROUTES (admin / members) ======
 router.use(requireAuth);

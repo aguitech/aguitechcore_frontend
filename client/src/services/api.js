@@ -12,13 +12,21 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
+// Routes that are publicly accessible — the 401 interceptor must NOT bounce
+// visitors here to /login, otherwise visiting /public/blog without a token
+// would break the listing.
+const PUBLIC_PREFIXES = ['/public/'];
+
 api.interceptors.response.use(
   (r) => r,
   (err) => {
     if (err.response?.status === 401) {
       localStorage.removeItem('token');
       localStorage.removeItem('user');
-      if (location.pathname !== '/login') location.href = '/login';
+      const onPublic = PUBLIC_PREFIXES.some((p) => location.pathname.startsWith(p));
+      if (!onPublic && location.pathname !== '/login') {
+        location.href = '/login';
+      }
     }
     return Promise.reject(err);
   }
