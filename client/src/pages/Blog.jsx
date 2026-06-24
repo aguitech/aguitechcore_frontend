@@ -40,6 +40,26 @@ function fmtSize(b) {
   return `${(b / (1024 * 1024)).toFixed(1)} MB`;
 }
 
+// Validate a File against an `accept` string (e.g. "image/*", "video/*",
+// ".pdf,.doc,.docx"). Returns true if the file is allowed.
+function matchesAccept(file, accept) {
+  if (!accept) return true;
+  const tokens = accept.split(',').map((t) => t.trim()).filter(Boolean);
+  const mime = (file.type || '').toLowerCase();
+  const name = (file.name || '').toLowerCase();
+  for (const t of tokens) {
+    if (t.startsWith('.')) {
+      if (name.endsWith(t.toLowerCase())) return true;
+    } else if (t.endsWith('/*')) {
+      const prefix = t.slice(0, -1).toLowerCase(); // "image/*" -> "image/"
+      if (mime.startsWith(prefix)) return true;
+    } else if (mime === t.toLowerCase()) {
+      return true;
+    }
+  }
+  return false;
+}
+
 function timeAgo(iso) {
   if (!iso) return '';
   const d = new Date(iso);
@@ -100,6 +120,11 @@ export default function Blog() {
   const [showCatMgr, setShowCatMgr] = useState(false);
   const [loadingPosts, setLoadingPosts] = useState(false);
   const [toast, setToast] = useToast();
+  // Pending uploads for new posts (the new post is created on save, then these
+  // queues are uploaded to it as images / videos / documents)
+  const [pendingImages, setPendingImages] = useState([]);
+  const [pendingVideos, setPendingVideos] = useState([]);
+  const [pendingDocs, setPendingDocs] = useState([]);
 
   // Initial load
   useEffect(() => {
@@ -148,6 +173,9 @@ export default function Blog() {
     setEditing({ _id: null });
     setForm({ ...EMPTY_POST, category: categories[0]?._id || '' });
     setError('');
+    setPendingImages([]);
+    setPendingVideos([]);
+    setPendingDocs([]);
     // Create a placeholder post object so the detail modal renders in create mode
     setDetail({ _id: null, status: 'borrador', tags: [], images: [], videos: [], documents: [], links: [], comments: [] });
     setEditingDetail(true);
@@ -202,6 +230,40 @@ export default function Blog() {
         const r = await api.post('/blog/posts', payload);
         savedId = r.data._id;
         setToast({ type: 'success', text: 'Publicación creada' });
+      }
+      // For NEW posts, upload any pending files now that we have a saved _id
+      if (!editing._id && savedId) {
+        const pendingGroups = [
+          { kind: 'images', files: pendingImages },
+          { kind: 'videos', files: pendingVideos },
+          { kind: 'documents', files: pendingDocs },
+        ];
+        let totalUploaded = 0;
+        for (const g of pendingGroups) {
+          if (g.files && g.files.length > 0) {
+            const fd = new FormData();
+            for (const f of g.files) fd.append('files', f);
+            try {
+              await api.post(`/blog/posts/${savedId}/${g.kind}`, fd, {
+                headers: { 'Content-Type': 'multipart/form-data' },
+              });
+              totalUploaded += g.files.length;
+            } catch (err) {
+              console.error(`failed to upload ${g.kind}:`, err);
+              setToast({
+                type: 'error',
+                text: `Error subiendo ${g.kind}: ${err.response?.data?.msg || err.message}`,
+              });
+            }
+          }
+        }
+        if (totalUploaded > 0) {
+          setToast({ type: 'success', text: `Publicación creada y ${totalUploaded} archivo(s) subido(s)` });
+        }
+        // Reset pending queues
+        setPendingImages([]);
+        setPendingVideos([]);
+        setPendingDocs([]);
       }
       // refresh in place
       closeForm();
@@ -644,6 +706,12 @@ export default function Blog() {
             if (isCreating) setDetail(null);
           }}
           onBackToList={() => setDetail(null)}
+          pendingImages={pendingImages}
+          setPendingImages={setPendingImages}
+          pendingVideos={pendingVideos}
+          setPendingVideos={setPendingVideos}
+          pendingDocs={pendingDocs}
+          setPendingDocs={setPendingDocs}
         />
       )}
 
@@ -694,8 +762,14 @@ function PostDetailModal({
   onSave,
   onCancelEdit,
   onBackToList,
+  pendingImages = [],
+  setPendingImages = () => {},
+  pendingVideos = [],
+  setPendingVideos = () => {},
+  pendingDocs = [],
+  setPendingDocs = () => {},
 }) {
-  const [tab, setTab] = useState(editingDetail ? 'content' : 'content');
+  const [tab, setTab] = useState('content');
   const [commentText, setCommentText] = useState('');
   const [busyComment, setBusyComment] = useState(false);
 
@@ -861,123 +935,243 @@ function PostDetailModal({
 
         {editingDetail ? (
           // ============ EDIT/CREATE MODE ============
-          <div className="tab-body">
-            {error && <div className="banner error">{error}</div>}
-            <div className="edit-grid">
-              <div className="edit-main">
-                <CoverImageField
-                  value={form.coverImage}
-                  onChange={(v) => setForm({ ...form, coverImage: v })}
-                  post={isCreating ? null : post}
-                  canEdit={!isCreating}
-                  onUpload={async (file) => {
-                    if (!post || !post._id) {
-                      setToast?.({
-                        type: 'error',
-                        text: 'Guarda la publicación primero para subir imágenes',
-                      });
-                      return;
-                    }
-                    const fd = new FormData();
-                    fd.append('files', file);
-                    await api.post(`/blog/posts/${post._id}/images`, fd, {
-                      headers: { 'Content-Type': 'multipart/form-data' },
-                    });
-                    const r = await api.get(`/blog/posts/${post._id}`);
-                    setForm({ ...form, coverImage: r.data.coverImage || '' });
-                    setToast?.({ type: 'success', text: 'Imagen subida' });
-                  }}
-                />
-                <label>
-                  Resumen
-                  <textarea
-                    className="input"
-                    rows={2}
-                    value={form.excerpt}
-                    onChange={(e) => setForm({ ...form, excerpt: e.target.value })}
-                    placeholder="Resumen corto (aparece en la lista)"
-                    maxLength={500}
-                  />
-                  <span className="muted small">
-                    {form.excerpt.length}/500 caracteres
-                  </span>
-                </label>
-                <label>
-                  Contenido / Nota principal
-                  <textarea
-                    className="input"
-                    rows={14}
-                    value={form.body}
-                    onChange={(e) => setForm({ ...form, body: e.target.value })}
-                    placeholder="Texto principal. Aquí puedes escribir notas largas, anuncios, tutoriales, fuentes, atribuciones…"
-                  />
-                </label>
-                <label>
-                  Etiquetas (separadas por coma)
-                  <input
-                    className="input"
-                    type="text"
-                    value={form.tags}
-                    onChange={(e) => setForm({ ...form, tags: e.target.value })}
-                    placeholder="ej. anuncio, tutorial, dream-team, gol, mundial"
-                  />
-                </label>
-                <LinksEditor
-                  links={form.links || []}
-                  onChange={(links) => setForm({ ...form, links })}
-                />
-              </div>
-              <div className="edit-side">
-                <div className="edit-side-card">
-                  <h4>📊 Resumen</h4>
-                  <ul className="meta-list">
-                    <li>
-                      <span className="muted">Imágenes</span>
-                      <strong>{images.length}</strong>
-                    </li>
-                    <li>
-                      <span className="muted">Videos</span>
-                      <strong>{videos.length}</strong>
-                    </li>
-                    <li>
-                      <span className="muted">Documentos</span>
-                      <strong>{documents.length}</strong>
-                    </li>
-                    <li>
-                      <span className="muted">Links</span>
-                      <strong>{links.length}</strong>
-                    </li>
-                    <li>
-                      <span className="muted">Notas</span>
-                      <strong>{comments.length}</strong>
-                    </li>
-                    <li>
-                      <span className="muted">Vistas</span>
-                      <strong>{post.views || 0}</strong>
-                    </li>
-                  </ul>
-                  <p className="muted small">
-                    {isCreating
-                      ? 'Después de crear la publicación podrás adjuntar imágenes, videos, documentos y links desde la vista de detalle.'
-                      : 'Los adjuntos se administran en la pestaña "📎 Archivos" del modo vista.'}
-                  </p>
-                </div>
-                <div className="edit-side-card">
-                  <h4>👤 Autor</h4>
-                  <p className="muted small">
-                    {post.author?.name || me?.name || '—'}
-                    <br />
-                    {!isCreating && post.createdAt && (
-                      <>
-                        Creado {timeAgo(post.createdAt)}
-                        <br />
-                        Actualizado {timeAgo(post.updatedAt)}
-                      </>
-                    )}
-                  </p>
-                </div>
-              </div>
+          <>
+            <div className="tabs">
+              <button
+                className={`tab ${tab === 'content' ? 'active' : ''}`}
+                onClick={() => setTab('content')}
+              >
+                📝 Contenido
+              </button>
+              <button
+                className={`tab ${tab === 'images' ? 'active' : ''}`}
+                onClick={() => setTab('images')}
+              >
+                🖼️ Imágenes ({isCreating ? pendingImages.length : images.length}
+                {isCreating && pendingImages.length > 0 ? ' pendientes' : ''})
+              </button>
+              <button
+                className={`tab ${tab === 'videos' ? 'active' : ''}`}
+                onClick={() => setTab('videos')}
+              >
+                🎬 Videos ({isCreating ? pendingVideos.length : videos.length}
+                {isCreating && pendingVideos.length > 0 ? ' pendientes' : ''})
+              </button>
+              <button
+                className={`tab ${tab === 'docs' ? 'active' : ''}`}
+                onClick={() => setTab('docs')}
+              >
+                📎 Documentos ({isCreating ? pendingDocs.length : documents.length}
+                {isCreating && pendingDocs.length > 0 ? ' pendientes' : ''})
+              </button>
             </div>
+
+            <div className="tab-body">
+              {error && <div className="banner error">{error}</div>}
+
+              {tab === 'content' && (
+                <div className="edit-grid">
+                  <div className="edit-main">
+                    <CoverImageField
+                      value={form.coverImage}
+                      onChange={(v) => setForm({ ...form, coverImage: v })}
+                      post={isCreating ? null : post}
+                      canEdit={!isCreating}
+                      onUpload={async (file) => {
+                        if (!post || !post._id) {
+                          setToast?.({
+                            type: 'error',
+                            text: 'Guarda la publicación primero para subir imágenes',
+                          });
+                          return;
+                        }
+                        const fd = new FormData();
+                        fd.append('files', file);
+                        await api.post(`/blog/posts/${post._id}/images`, fd, {
+                          headers: { 'Content-Type': 'multipart/form-data' },
+                        });
+                        const r = await api.get(`/blog/posts/${post._id}`);
+                        setForm({ ...form, coverImage: r.data.coverImage || '' });
+                        setToast?.({ type: 'success', text: 'Imagen subida' });
+                      }}
+                    />
+                    <label>
+                      Resumen
+                      <textarea
+                        className="input"
+                        rows={2}
+                        value={form.excerpt}
+                        onChange={(e) => setForm({ ...form, excerpt: e.target.value })}
+                        placeholder="Resumen corto (aparece en la lista)"
+                        maxLength={500}
+                      />
+                      <span className="muted small">
+                        {form.excerpt.length}/500 caracteres
+                      </span>
+                    </label>
+                    <label>
+                      Contenido / Nota principal
+                      <textarea
+                        className="input"
+                        rows={14}
+                        value={form.body}
+                        onChange={(e) => setForm({ ...form, body: e.target.value })}
+                        placeholder="Texto principal. Aquí puedes escribir notas largas, anuncios, tutoriales, fuentes, atribuciones…"
+                      />
+                    </label>
+                    <label>
+                      Etiquetas (separadas por coma)
+                      <input
+                        className="input"
+                        type="text"
+                        value={form.tags}
+                        onChange={(e) => setForm({ ...form, tags: e.target.value })}
+                        placeholder="ej. anuncio, tutorial, dream-team, gol, mundial"
+                      />
+                    </label>
+                    <LinksEditor
+                      links={form.links || []}
+                      onChange={(links) => setForm({ ...form, links })}
+                    />
+                  </div>
+                  <div className="edit-side">
+                    <div className="edit-side-card">
+                      <h4>📊 Resumen</h4>
+                      <ul className="meta-list">
+                        <li>
+                          <span className="muted">Imágenes</span>
+                          <strong>
+                            {isCreating ? pendingImages.length : images.length}
+                          </strong>
+                        </li>
+                        <li>
+                          <span className="muted">Videos</span>
+                          <strong>
+                            {isCreating ? pendingVideos.length : videos.length}
+                          </strong>
+                        </li>
+                        <li>
+                          <span className="muted">Documentos</span>
+                          <strong>
+                            {isCreating ? pendingDocs.length : documents.length}
+                          </strong>
+                        </li>
+                        <li>
+                          <span className="muted">Links</span>
+                          <strong>{links.length}</strong>
+                        </li>
+                        <li>
+                          <span className="muted">Notas</span>
+                          <strong>{comments.length}</strong>
+                        </li>
+                        <li>
+                          <span className="muted">Vistas</span>
+                          <strong>{post.views || 0}</strong>
+                        </li>
+                      </ul>
+                      <p className="muted small">
+                        {isCreating
+                          ? 'Puedes arrastrar o seleccionar varios archivos en cada pestaña. Se subirán al guardar la publicación.'
+                          : 'Administra archivos en las pestañas 🖼️ / 🎬 / 📎. Todo se guarda de inmediato.'}
+                      </p>
+                    </div>
+                    <div className="edit-side-card">
+                      <h4>👤 Autor</h4>
+                      <p className="muted small">
+                        {post.author?.name || me?.name || '—'}
+                        <br />
+                        {!isCreating && post.createdAt && (
+                          <>
+                            Creado {timeAgo(post.createdAt)}
+                            <br />
+                            Actualizado {timeAgo(post.updatedAt)}
+                          </>
+                        )}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {tab === 'images' && (
+                isCreating ? (
+                  <PendingUploads
+                    kind="images"
+                    accept="image/*"
+                    files={pendingImages}
+                    onChange={setPendingImages}
+                    uploadLabel="Subir imágenes"
+                  />
+                ) : (
+                  <AttachmentGallery
+                    key={`edit-images-${post._id}-${images.length}`}
+                    kind="images"
+                    files={images}
+                    onAttach={canEdit ? (files) => onAttach(post, 'images', files) : null}
+                    onRemove={canEdit ? (fileId) => onRemoveFile(post, 'images', fileId) : null}
+                    onBulkRemove={canEdit ? (ids) => onBulkRemove(post, 'images', ids) : null}
+                    onSetCover={canEdit ? (fileId) => onSetCover(post, fileId) : null}
+                    accept="image/*"
+                    uploadLabel="Subir imágenes"
+                    isCover={(file) => post.coverImage && post.coverImage === file.url}
+                    readOnly={!canEdit}
+                  />
+                )
+              )}
+
+              {tab === 'videos' && (
+                isCreating ? (
+                  <PendingUploads
+                    kind="videos"
+                    accept="video/*"
+                    files={pendingVideos}
+                    onChange={setPendingVideos}
+                    uploadLabel="Subir videos"
+                  />
+                ) : (
+                  <AttachmentGallery
+                    key={`edit-videos-${post._id}-${videos.length}`}
+                    kind="videos"
+                    files={videos}
+                    onAttach={canEdit ? (files) => onAttach(post, 'videos', files) : null}
+                    onRemove={canEdit ? (fileId) => onRemoveFile(post, 'videos', fileId) : null}
+                    onBulkRemove={canEdit ? (ids) => onBulkRemove(post, 'videos', ids) : null}
+                    onSetCover={null}
+                    accept="video/*"
+                    uploadLabel="Subir videos"
+                    isCover={null}
+                    readOnly={!canEdit}
+                  />
+                )
+              )}
+
+              {tab === 'docs' && (
+                isCreating ? (
+                  <PendingUploads
+                    kind="documents"
+                    accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.md,.zip,.rar,.7z,.csv"
+                    files={pendingDocs}
+                    onChange={setPendingDocs}
+                    uploadLabel="Subir documentos"
+                  />
+                ) : (
+                  <AttachmentGallery
+                    key={`edit-docs-${post._id}-${documents.length}`}
+                    kind="documents"
+                    files={documents}
+                    onAttach={canEdit ? (files) => onAttach(post, 'documents', files) : null}
+                    onRemove={canEdit ? (fileId) => onRemoveFile(post, 'documents', fileId) : null}
+                    onBulkRemove={canEdit ? (ids) => onBulkRemove(post, 'documents', ids) : null}
+                    onSetCover={null}
+                    accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.md,.zip,.rar,.7z,.csv"
+                    uploadLabel="Subir documentos"
+                    isCover={null}
+                    readOnly={!canEdit}
+                  />
+                )
+              )}
+            </div>
+
             <div className="edit-footer">
               <button
                 type="button"
@@ -996,11 +1190,15 @@ function PostDetailModal({
                 {busy
                   ? '⏳ Guardando…'
                   : isCreating
-                  ? '✨ Crear publicación'
+                  ? `✨ Crear publicación${
+                      pendingImages.length + pendingVideos.length + pendingDocs.length > 0
+                        ? ` y subir ${pendingImages.length + pendingVideos.length + pendingDocs.length} archivo(s)`
+                        : ''
+                    }`
                   : '💾 Guardar cambios'}
               </button>
             </div>
-          </div>
+          </>
         ) : (
           // ============ VIEW MODE ============
           <>
@@ -1449,6 +1647,339 @@ function LinksList({ links, canEdit, onAdd, onRemove }) {
           </li>
         ))}
       </ul>
+    </div>
+  );
+}
+
+// ============ pending uploads (new posts only) ============
+// local-only file queue — files live in memory until the post is created and saved.
+// supports multi-select, drag-drop, lightbox preview, bulk remove, and cover-set.
+function PendingUploads({ kind, accept, files, onChange, uploadLabel }) {
+  const inputRef = useRef(null);
+  const [selected, setSelected] = useState(new Set());
+  const [lightboxIdx, setLightboxIdx] = useState(null);
+  const [dragOver, setDragOver] = useState(false);
+  const [error, setError] = useState('');
+
+  function pick() {
+    inputRef.current?.click();
+  }
+
+  // Reject files that don't match the kind's accept pattern
+  function validateFiles(fl) {
+    const valid = [];
+    const rejected = [];
+    for (const f of fl) {
+      if (matchesAccept(f, accept)) valid.push(f);
+      else rejected.push(f);
+    }
+    if (rejected.length > 0) {
+      setError(
+        `${rejected.length} archivo(s) rechazado(s) por tipo (esperado: ${accept}): ` +
+          rejected.map((f) => f.name).join(', ')
+      );
+      setTimeout(() => setError(''), 5000);
+    } else {
+      setError('');
+    }
+    return valid;
+  }
+
+  function handleFiles(fl) {
+    if (!fl || fl.length === 0) return;
+    const valid = validateFiles(Array.from(fl));
+    if (valid.length === 0) return;
+    // Each pending file gets a stable clientId, plus a preview blob URL
+    const additions = valid.map((f) => ({
+      _clientId: `pending-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
+      file: f,
+      filename: f.name,
+      size: f.size,
+      mimetype: f.type,
+      url: f.type.startsWith('image/') || f.type.startsWith('video/') ? URL.createObjectURL(f) : null,
+    }));
+    onChange([...files, ...additions]);
+  }
+
+  function onDrop(e) {
+    e.preventDefault();
+    setDragOver(false);
+    handleFiles(Array.from(e.dataTransfer.files || []));
+  }
+
+  function removeOne(clientId) {
+    onChange(files.filter((f) => f._clientId !== clientId));
+    setSelected((prev) => {
+      const next = new Set(prev);
+      next.delete(clientId);
+      return next;
+    });
+  }
+
+  function toggleSelect(clientId) {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(clientId)) next.delete(clientId);
+      else next.add(clientId);
+      return next;
+    });
+  }
+
+  function selectAll() {
+    setSelected(new Set(files.map((f) => f._clientId)));
+  }
+
+  function clearSelection() {
+    setSelected(new Set());
+  }
+
+  function bulkRemove() {
+    if (selected.size === 0) return;
+    if (!confirm(`¿Quitar ${selected.size} archivo(s) de la cola?`)) return;
+    onChange(files.filter((f) => !selected.has(f._clientId)));
+    clearSelection();
+  }
+
+  function openLightbox(file, idx) {
+    const isImg = (file.mimetype || '').startsWith('image/');
+    const isVid = (file.mimetype || '').startsWith('video/');
+    if (!isImg && !isVid) {
+      // Documents: no preview, but show info
+      return;
+    }
+    setLightboxIdx(idx);
+  }
+
+  function closeLightbox() {
+    setLightboxIdx(null);
+  }
+
+  function lightboxPrev() {
+    setLightboxIdx((i) => (i > 0 ? i - 1 : files.length - 1));
+  }
+
+  function lightboxNext() {
+    setLightboxIdx((i) => (i < files.length - 1 ? i + 1 : 0));
+  }
+
+  useEffect(() => {
+    if (lightboxIdx === null) return;
+    function onKey(e) {
+      if (e.key === 'Escape') closeLightbox();
+      else if (e.key === 'ArrowLeft') lightboxPrev();
+      else if (e.key === 'ArrowRight') lightboxNext();
+    }
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lightboxIdx, files.length]);
+
+  useEffect(() => {
+    setSelected(new Set());
+  }, [files.length]);
+
+  // Revoke object URLs on unmount to avoid memory leaks
+  useEffect(() => {
+    return () => {
+      files.forEach((f) => {
+        if (f.url && f.url.startsWith('blob:')) URL.revokeObjectURL(f.url);
+      });
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const totalSize = files.reduce((sum, f) => sum + (f.size || 0), 0);
+  const lightboxFile = lightboxIdx !== null ? files[lightboxIdx] : null;
+
+  return (
+    <div>
+      {error && <div className="banner error">{error}</div>}
+      <div className="banner info">
+        📥 <strong>Archivos pendientes:</strong> estos archivos se subirán al
+        servidor cuando hagas click en <strong>✨ Crear publicación</strong>.
+        Puedes agregar varios a la vez y quitarlos antes de guardar.
+      </div>
+
+      <div className="gallery-toolbar">
+        <input
+          ref={inputRef}
+          type="file"
+          accept={accept}
+          multiple
+          style={{ display: 'none' }}
+          onChange={(e) => {
+            handleFiles(Array.from(e.target.files || []));
+            if (inputRef.current) inputRef.current.value = '';
+          }}
+        />
+        <button
+          type="button"
+          className={`btn primary ${dragOver ? 'dragging' : ''}`}
+          onClick={pick}
+          onDragOver={(e) => {
+            e.preventDefault();
+            setDragOver(true);
+          }}
+          onDragLeave={() => setDragOver(false)}
+          onDrop={onDrop}
+        >
+          📁 Examinar… {uploadLabel.replace('Subir ', '')}
+        </button>
+        <span className="muted small">
+          {files.length} {files.length === 1 ? 'archivo' : 'archivos'} · {fmtSize(totalSize)}
+        </span>
+        <div className="gallery-toolbar-right">
+          {files.length > 0 && (
+            <>
+              {selected.size === 0 ? (
+                <button type="button" className="btn ghost small" onClick={selectAll}>
+                  ☑️ Seleccionar todos
+                </button>
+              ) : (
+                <>
+                  <span className="muted small">{selected.size} seleccionados</span>
+                  <button type="button" className="btn ghost small" onClick={clearSelection}>
+                    Limpiar
+                  </button>
+                  <button type="button" className="btn danger small" onClick={bulkRemove}>
+                    🗑 Quitar {selected.size}
+                  </button>
+                </>
+              )}
+            </>
+          )}
+        </div>
+      </div>
+
+      {dragOver && (
+        <div className="drop-zone active">
+          📥 Suelta los archivos aquí para agregarlos a la cola
+        </div>
+      )}
+
+      {files.length === 0 && (
+        <div
+          className={`empty small drop-target ${dragOver ? 'over' : ''}`}
+          onDragOver={(e) => {
+            e.preventDefault();
+            setDragOver(true);
+          }}
+          onDragLeave={() => setDragOver(false)}
+          onDrop={onDrop}
+        >
+          <p>📎 Sin archivos pendientes.</p>
+          <p className="muted small">
+            Haz click en <strong>📁 Examinar…</strong> o arrastra varios archivos
+            aquí. Se subirán al guardar la publicación.
+          </p>
+        </div>
+      )}
+
+      <div className="gallery-grid">
+        {files.map((f, idx) => {
+          const isImg = (f.mimetype || '').startsWith('image/');
+          const isVid = (f.mimetype || '').startsWith('video/');
+          const isSel = selected.has(f._clientId);
+          return (
+            <div
+              key={f._clientId}
+              className={`gallery-tile ${isSel ? 'selected' : ''}`}
+            >
+              <button
+                type="button"
+                className={`gallery-select ${isSel ? 'on' : ''}`}
+                onClick={() => toggleSelect(f._clientId)}
+                title={isSel ? 'Quitar de selección' : 'Seleccionar'}
+                aria-label="Seleccionar"
+              >
+                {isSel ? '✓' : ''}
+              </button>
+              <span className="cover-badge pending">⏳ Pendiente</span>
+
+              <div
+                className="gallery-preview"
+                onClick={() => (isImg || isVid) && openLightbox(f, idx)}
+              >
+                {isImg ? (
+                  <img src={f.url} alt={f.filename} />
+                ) : isVid ? (
+                  <>
+                    <video src={f.url} preload="metadata" />
+                    <span className="video-play-icon">▶</span>
+                  </>
+                ) : (
+                  <div className="doc-tile">
+                    <span className="file-icon-big">
+                      {fileIcon(f.mimetype, f.filename)}
+                    </span>
+                    <span className="file-name-sm">{f.filename}</span>
+                    <span className="muted small">{fmtSize(f.size)}</span>
+                  </div>
+                )}
+              </div>
+
+              <div className="gallery-meta">
+                <span className="gallery-filename" title={f.filename}>
+                  {f.filename.length > 24 ? f.filename.slice(0, 21) + '…' : f.filename}
+                </span>
+                <span className="muted small">{fmtSize(f.size)}</span>
+              </div>
+
+              <div className="gallery-actions">
+                <button
+                  type="button"
+                  className="btn ghost danger small"
+                  onClick={() => removeOne(f._clientId)}
+                  title="Quitar de la cola"
+                >
+                  🗑
+                </button>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {lightboxFile && (
+        <div className="lightbox-backdrop" onClick={closeLightbox}>
+          <div className="lightbox" onClick={(e) => e.stopPropagation()}>
+            <button className="lightbox-close" onClick={closeLightbox} aria-label="Cerrar">
+              ×
+            </button>
+            {files.length > 1 && (
+              <>
+                <button
+                  className="lightbox-nav lightbox-prev"
+                  onClick={lightboxPrev}
+                  aria-label="Anterior"
+                >
+                  ‹
+                </button>
+                <button
+                  className="lightbox-nav lightbox-next"
+                  onClick={lightboxNext}
+                  aria-label="Siguiente"
+                >
+                  ›
+                </button>
+              </>
+            )}
+            <div className="lightbox-content">
+              {(lightboxFile.mimetype || '').startsWith('image/') ? (
+                <img src={lightboxFile.url} alt={lightboxFile.filename} />
+              ) : (
+                <video src={lightboxFile.url} controls autoPlay />
+              )}
+            </div>
+            <div className="lightbox-footer">
+              <strong>{lightboxFile.filename}</strong>
+              <span className="muted small">
+                {fmtSize(lightboxFile.size)} · {lightboxIdx + 1}/{files.length} · ⏳ pendiente
+              </span>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
