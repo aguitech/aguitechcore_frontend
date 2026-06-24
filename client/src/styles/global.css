@@ -1382,3 +1382,231 @@ pre.body {
   max-height: 400px;
   overflow-y: auto;
 }
+
+/* ============ inline-edit (focus mode) ============ */
+.focus-mode-hint {
+  text-align: center;
+  background: linear-gradient(135deg, #fff7ed 0%, #fef3c7 100%);
+  border: 1px dashed #f59e0b;
+  border-radius: 10px;
+  padding: 24px 16px;
+  color: #92400e;
+  margin: 12px 0;
+}
+.focus-mode-hint strong { color: #b45309; }
+
+.breadcrumb {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  margin-bottom: 4px;
+  flex-wrap: wrap;
+}
+.breadcrumb .link {
+  background: none;
+  border: none;
+  color: #FF6A00;
+  cursor: pointer;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 500;
+}
+.breadcrumb .link:hover { background: #fff7ed; text-decoration: underline; }
+
+.link {
+  background: none;
+  border: none;
+  color: #FF6A00;
+  cursor: pointer;
+  padding: 0;
+  text-decoration: underline;
+  font-size: inherit;
+}
+.link:hover { color: #ea580c; }
+
+.input.tiny {
+  padding: 4px 8px !important;
+  font-size: 12px !important;
+  height: auto !important;
+  width: auto !important;
+  min-width: 140px;
+}
+
+.inline-title-edit {
+  display: inline-block !important;
+  width: auto !important;
+  min-width: 320px;
+  font-size: 22px !important;
+  font-weight: 700 !important;
+  padding: 6px 10px !important;
+  margin-left: 8px;
+}
+
+.edit-grid {
+  display: grid;
+  grid-template-columns: 1fr 280px;
+  gap: 24px;
+  margin: 16px 0;
+}
+@media (max-width: 860px) {
+  .edit-grid { grid-template-columns: 1fr; }
+}
+
+.edit-main {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.edit-main label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 13px;
+  font-weight: 500;
+  color: #475569;
+}
+
+.edit-side {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.edit-side-card {
+  background: #fafafa;
+  border: 1px solid #eee;
+  border-radius: 10px;
+  padding: 14px 16px;
+}
+.edit-side-card h4 {
+  margin: 0 0 8px;
+  font-size: 13px;
+  color: #1a1a1a;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.meta-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.meta-list li {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 4px 0;
+  border-bottom: 1px solid #f0f0f0;
+}
+.meta-list li:last-child { border-bottom: none; }
+
+.edit-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  padding-top: 16px;
+  border-top: 1px solid #eee;
+  margin-top: 12px;
+}
+
+/* ============ cover image field (file picker + url) ============ */
+.cover-field {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  background: #fafafa;
+  border: 1px solid #eee;
+  border-radius: 10px;
+}
+.cover-field-label {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 13px;
+  font-weight: 500;
+  color: #475569;
+}
+.cover-field-label > span:first-child { font-size: 14px; }
+.cover-field-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.cover-field-row .input { flex: 1 1 220px; min-width: 180px; }
+.btn.primary.dragging { background: #ea580c; transform: scale(1.02); }
+.cover-preview-note {
+  position: absolute;
+  bottom: 8px;
+  left: 8px;
+  right: 8px;
+  background: rgba(0,0,0,0.7);
+  color: white;
+  padding: 6px 10px;
+  border-radius: 6px;
+  font-size: 12px;
+  text-align: center;
+}
+
+/* ============ links editor (form mode) + list (view mode) ============ */
+.links-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px;
+  background: #fafafa;
+  border: 1px solid #eee;
+  border-radius: 10px;
+}
+.links-editor h4 {
+  margin: 0;
+  font-size: 14px;
+  color: #1a1a1a;
+}
+.link-form {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 8px;
+}
+.link-form .input { width: 100%; }
+.link-form .row { display: flex; gap: 8px; justify-content: flex-end; }
+.link-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.link-list li {
+  background: white;
+  border: 1px solid #eee;
+  border-radius: 8px;
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  position: relative;
+}
+.link-list li p { margin: 2px 0; }
+.link-list li .btn { align-self: flex-start; margin-top: 4px; }
+.link-list.edit li { background: #fff; }
+
+/* ============ drop target (gallery empty state) ============ */
+.empty.small.drop-target {
+  border: 2px dashed #d4d4d8;
+  border-radius: 10px;
+  padding: 28px 16px;
+  text-align: center;
+  transition: all 0.15s;
+}
+.empty.small.drop-target.over {
+  border-color: #FF6A00;
+  background: #fff7ed;
+}
+.empty.small.drop-target p { margin: 4px 0; }
