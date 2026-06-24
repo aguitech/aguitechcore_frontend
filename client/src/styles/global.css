@@ -1267,3 +1267,118 @@ code { background: var(--bg-2); padding: 1px 6px; border-radius: 4px; font-size:
   .gallery-toolbar { padding: 8px; gap: 8px; }
   .gallery-toolbar-right { margin-left: 0; width: 100%; justify-content: flex-end; }
 }
+
+/* ============ toast notifications ============ */
+.toast {
+  position: fixed;
+  bottom: 32px;
+  right: 32px;
+  padding: 14px 22px;
+  border-radius: 10px;
+  background: #1a1a1a;
+  color: #fff;
+  font-weight: 600;
+  font-size: 14px;
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.35);
+  z-index: 9999;
+  animation: toast-slide 0.25s ease-out;
+}
+.toast-success { background: #16a34a; }
+.toast-error { background: #dc2626; }
+@keyframes toast-slide {
+  from { opacity: 0; transform: translateY(20px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* ============ empty states ============ */
+.empty {
+  text-align: center;
+  padding: 60px 20px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+}
+.empty h3 { margin: 0; font-size: 18px; color: #1a1a1a; }
+.empty.small { padding: 30px 16px; }
+.empty.small p { margin: 4px 0; }
+
+/* ============ post card quick actions ============ */
+.post-quick-actions {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid #f0f0f0;
+  flex-wrap: wrap;
+}
+.post-quick-actions .btn.small {
+  font-size: 12px;
+  padding: 5px 10px;
+}
+
+/* ============ drop zone ============ */
+.drop-zone {
+  border: 2px dashed #cbd5e1;
+  border-radius: 10px;
+  padding: 28px 16px;
+  text-align: center;
+  color: #475569;
+  background: #f8fafc;
+  margin: 12px 0;
+  transition: all 0.15s ease;
+}
+.drop-zone.active {
+  border-color: #3b82f6;
+  background: #eff6ff;
+  color: #1d4ed8;
+}
+
+/* ============ category manager ============ */
+.cat-mgr-list {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 12px;
+  flex-wrap: wrap;
+}
+.cat-mgr-list .input { flex: 1; max-width: 320px; min-width: 200px; }
+.category-list { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 8px; }
+.category-list li {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  background: #fafafa;
+  border: 1px solid #eee;
+  border-radius: 8px;
+  flex-wrap: wrap;
+}
+.category-list .cat-badge {
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-weight: 600;
+  font-size: 13px;
+  flex-shrink: 0;
+}
+.category-list .actions { margin-left: auto; display: flex; gap: 6px; }
+
+/* ============ modal size variants ============ */
+.modal.xlarge { max-width: 1000px; width: 95vw; max-height: 92vh; overflow-y: auto; }
+.modal.large  { max-width: 720px;  width: 92vw; max-height: 92vh; overflow-y: auto; }
+
+/* ============ body preview (long text) ============ */
+pre.body {
+  white-space: pre-wrap;
+  font-family: inherit;
+  font-size: 14px;
+  line-height: 1.6;
+  background: #fafafa;
+  padding: 16px;
+  border-radius: 8px;
+  border: 1px solid #eee;
+  margin: 12px 0;
+  max-height: 400px;
+  overflow-y: auto;
+}

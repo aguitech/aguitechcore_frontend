@@ -1,5 +1,4 @@
 import { useEffect, useRef, useState } from 'react';
-import { Link, useSearchParams } from 'react-router-dom';
 import Layout from '../components/Layout.jsx';
 import api from '../services/api.js';
 
@@ -63,8 +62,28 @@ const EMPTY_POST = {
   links: [],
 };
 
+// hook: light debounce for typing in the search box
+function useDebounced(value, ms = 300) {
+  const [v, setV] = useState(value);
+  useEffect(() => {
+    const t = setTimeout(() => setV(value), ms);
+    return () => clearTimeout(t);
+  }, [value, ms]);
+  return v;
+}
+
+// toast for success feedback
+function useToast() {
+  const [toast, setToast] = useState(null);
+  useEffect(() => {
+    if (!toast) return;
+    const t = setTimeout(() => setToast(null), 2800);
+    return () => clearTimeout(t);
+  }, [toast]);
+  return [toast, setToast];
+}
+
 export default function Blog() {
-  const [searchParams, setSearchParams] = useSearchParams();
   const [posts, setPosts] = useState([]);
   const [categories, setCategories] = useState([]);
   const [me, setMe] = useState(null);
@@ -75,8 +94,11 @@ export default function Blog() {
   const [filterStatus, setFilterStatus] = useState('');
   const [filterCategory, setFilterCategory] = useState('');
   const [filterQ, setFilterQ] = useState('');
+  const debouncedQ = useDebounced(filterQ);
   const [detail, setDetail] = useState(null); // post being viewed in detail modal
   const [showCatMgr, setShowCatMgr] = useState(false);
+  const [loadingPosts, setLoadingPosts] = useState(false);
+  const [toast, setToast] = useToast();
 
   // Initial load
   useEffect(() => {
@@ -85,24 +107,41 @@ export default function Blog() {
   }, []);
 
   async function loadAll() {
-    const [p, c] = await Promise.all([api.get('/blog/posts'), api.get('/blog/categories')]);
-    setPosts(p.data);
-    setCategories(c.data);
+    setLoadingPosts(true);
+    try {
+      const [p, c] = await Promise.all([
+        api.get('/blog/posts'),
+        api.get('/blog/categories'),
+      ]);
+      setPosts(p.data);
+      setCategories(c.data);
+    } catch (err) {
+      setError(err.response?.data?.msg || 'Error al cargar publicaciones');
+    } finally {
+      setLoadingPosts(false);
+    }
   }
 
   async function loadPosts() {
     const params = new URLSearchParams();
     if (filterStatus) params.set('status', filterStatus);
     if (filterCategory) params.set('category', filterCategory);
-    if (filterQ) params.set('q', filterQ);
+    if (debouncedQ) params.set('q', debouncedQ);
     const qs = params.toString();
-    const r = await api.get(`/blog/posts${qs ? '?' + qs : ''}`);
-    setPosts(r.data);
+    setLoadingPosts(true);
+    try {
+      const r = await api.get(`/blog/posts${qs ? '?' + qs : ''}`);
+      setPosts(r.data);
+    } catch (err) {
+      setError(err.response?.data?.msg || 'Error al filtrar publicaciones');
+    } finally {
+      setLoadingPosts(false);
+    }
   }
   useEffect(() => {
     loadPosts();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filterStatus, filterCategory, filterQ]);
+  }, [filterStatus, filterCategory, debouncedQ]);
 
   function openCreate() {
     setEditing({ _id: null });
@@ -153,8 +192,10 @@ export default function Blog() {
       };
       if (editing._id) {
         await api.put(`/blog/posts/${editing._id}`, payload);
+        setToast({ type: 'success', text: 'Publicación actualizada' });
       } else {
         await api.post('/blog/posts', payload);
+        setToast({ type: 'success', text: 'Publicación creada' });
       }
       closeForm();
       await loadAll();
@@ -168,13 +209,26 @@ export default function Blog() {
   async function togglePublish(post) {
     const next = post.status === 'publicado' ? 'borrador' : 'publicado';
     await api.put(`/blog/posts/${post._id}`, { status: next });
+    setToast({
+      type: 'success',
+      text: next === 'publicado' ? 'Publicada ✓' : 'Pasada a borrador',
+    });
     await loadAll();
   }
 
   async function removePost(post) {
     if (!confirm(`¿Eliminar "${post.title}"? Esta acción no se puede deshacer.`)) return;
     await api.delete(`/blog/posts/${post._id}`);
+    setToast({ type: 'success', text: 'Publicación eliminada' });
     await loadAll();
+  }
+
+  // Permission helpers — admin can do anything, member only on own posts
+  function canEditPost(post) {
+    if (!me || !post) return false;
+    if (me.role === 'admin') return true;
+    const authorId = post.author?._id || post.author;
+    return String(me._id) === String(authorId);
   }
 
   // ===== attachment helpers (work on a saved post) =====
@@ -184,6 +238,7 @@ export default function Blog() {
     await api.post(`/blog/posts/${post._id}/${kind}`, fd, {
       headers: { 'Content-Type': 'multipart/form-data' },
     });
+    setToast({ type: 'success', text: `${fileList.length} archivo(s) subido(s)` });
     await loadAll();
     if (detail?._id === post._id) {
       const r = await api.get(`/blog/posts/${post._id}`);
@@ -203,13 +258,13 @@ export default function Blog() {
   async function bulkRemoveFiles(post, kind, fileIds) {
     if (!fileIds || fileIds.length === 0) return;
     if (!confirm(`¿Eliminar ${fileIds.length} archivo(s)? Esta acción no se puede deshacer.`)) return;
-    // delete in parallel — each one is independent
     await Promise.all(fileIds.map((id) =>
       api.delete(`/blog/posts/${post._id}/files/${kind}/${id}`).catch((err) => {
         console.error(`failed to delete ${kind}/${id}:`, err);
         return null;
       })
     ));
+    setToast({ type: 'success', text: `${fileIds.length} archivo(s) eliminado(s)` });
     await loadAll();
     if (detail?._id === post._id) {
       const r = await api.get(`/blog/posts/${post._id}`);
@@ -221,6 +276,7 @@ export default function Blog() {
     const file = (post.images || []).find((f) => String(f._id) === String(fileId));
     if (!file) return;
     await api.put(`/blog/posts/${post._id}`, { coverImage: file.url });
+    setToast({ type: 'success', text: 'Portada actualizada' });
     await loadAll();
     if (detail?._id === post._id) {
       const r = await api.get(`/blog/posts/${post._id}`);
@@ -237,6 +293,7 @@ export default function Blog() {
     await api.post(`/blog/posts/${detail._id}/links`, { url, title, description });
     const r = await api.get(`/blog/posts/${detail._id}`);
     setDetail(r.data);
+    setToast({ type: 'success', text: 'Link agregado' });
   }
 
   async function removeLink(linkId) {
@@ -262,13 +319,27 @@ export default function Blog() {
     setDetail(r.data);
   }
 
+  const filtersActive = filterStatus || filterCategory || debouncedQ;
+  const totalAttachments = posts.reduce(
+    (n, p) =>
+      n +
+      (p.images?.length || 0) +
+      (p.videos?.length || 0) +
+      (p.documents?.length || 0),
+    0
+  );
+
   return (
     <Layout>
       <div className="page">
         <div className="page-header">
           <div>
             <h1>📰 Blog</h1>
-            <p className="muted">Publicaciones con imágenes, videos, documentos, links y notas.</p>
+            <p className="muted">
+              {posts.length} {posts.length === 1 ? 'publicación' : 'publicaciones'}
+              {' · '}
+              {totalAttachments} adjuntos totales
+            </p>
           </div>
           <div className="actions">
             <button className="btn ghost" onClick={() => setShowCatMgr(true)}>
@@ -293,70 +364,190 @@ export default function Blog() {
         <div className="filters">
           <input
             type="text"
-            placeholder="Buscar publicación..."
+            placeholder="🔍 Buscar publicación por título, contenido o tag…"
             value={filterQ}
             onChange={(e) => setFilterQ(e.target.value)}
             className="input"
           />
-          <select value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)} className="input">
-            <option value="">Todos los estados</option>
-            <option value="borrador">Borrador</option>
-            <option value="publicado">Publicado</option>
+          <select
+            value={filterStatus}
+            onChange={(e) => setFilterStatus(e.target.value)}
+            className="input"
+          >
+            <option value="">📋 Todos los estados</option>
+            <option value="borrador">📝 Borrador</option>
+            <option value="publicado">✅ Publicado</option>
           </select>
-          <select value={filterCategory} onChange={(e) => setFilterCategory(e.target.value)} className="input">
-            <option value="">Todas las categorías</option>
+          <select
+            value={filterCategory}
+            onChange={(e) => setFilterCategory(e.target.value)}
+            className="input"
+          >
+            <option value="">🏷️ Todas las categorías</option>
             {categories.map((c) => (
               <option key={c._id} value={c._id}>
                 {c.icon} {c.name}
               </option>
             ))}
           </select>
+          {filtersActive && (
+            <button
+              className="btn ghost small"
+              onClick={() => {
+                setFilterQ('');
+                setFilterStatus('');
+                setFilterCategory('');
+              }}
+              title="Limpiar filtros"
+            >
+              ✕ Limpiar
+            </button>
+          )}
         </div>
 
         {/* post list */}
-        <div className="card-grid">
-          {posts.length === 0 && (
-            <div className="empty">
-              <p>📭 No hay publicaciones todavía.</p>
-              <button className="btn primary" onClick={openCreate} disabled={categories.length === 0}>
-                Crear la primera
+        {loadingPosts ? (
+          <div className="muted center pad">⏳ Cargando publicaciones…</div>
+        ) : posts.length === 0 ? (
+          <div className="empty">
+            <span style={{ fontSize: 64 }}>📭</span>
+            <h3>No hay publicaciones{filtersActive ? ' con esos filtros' : ' todavía'}</h3>
+            <p className="muted">
+              {filtersActive
+                ? 'Intenta limpiar los filtros o ajustar la búsqueda.'
+                : 'Crea la primera publicación para empezar.'}
+            </p>
+            {filtersActive ? (
+              <button
+                className="btn ghost"
+                onClick={() => {
+                  setFilterQ('');
+                  setFilterStatus('');
+                  setFilterCategory('');
+                }}
+              >
+                ✕ Limpiar filtros
               </button>
-            </div>
-          )}
-          {posts.map((p) => (
-            <article key={p._id} className="post-card" onClick={() => setDetail(p)}>
-              {p.coverImage ? (
-                <div
-                  className="post-cover"
-                  style={{ backgroundImage: `url(${p.coverImage})` }}
-                />
-              ) : (
-                <div className="post-cover placeholder">
-                  <span style={{ fontSize: 48 }}>{p.category?.icon || '📝'}</span>
-                </div>
-              )}
-              <div className="post-body">
-                <div className="post-meta">
-                  <span
-                    className="badge"
-                    style={{ background: (p.category?.color || '#FF6A00') + '22', color: p.category?.color || '#FF6A00' }}
-                  >
-                    {p.category?.icon} {p.category?.name || 'Sin categoría'}
-                  </span>
-                  <span className={`status ${p.status}`}>{p.status}</span>
-                </div>
-                <h3>{p.title}</h3>
-                {p.excerpt && <p className="excerpt">{p.excerpt}</p>}
-                <div className="post-footer">
-                  <span className="muted small">{timeAgo(p.updatedAt)}</span>
-                  <span className="muted small">
-                    {(p.images?.length || 0) + (p.videos?.length || 0) + (p.documents?.length || 0)} adjuntos · {p.comments?.length || 0} notas
-                  </span>
-                </div>
-              </div>
-            </article>
-          ))}
-        </div>
+            ) : (
+              <button
+                className="btn primary"
+                onClick={openCreate}
+                disabled={categories.length === 0}
+              >
+                ＋ Crear la primera
+              </button>
+            )}
+          </div>
+        ) : (
+          <div className="card-grid">
+            {posts.map((p) => {
+              const authorId = p.author?._id || p.author;
+              const editable = canEditPost(p);
+              return (
+                <article
+                  key={p._id}
+                  className="post-card"
+                  onClick={(e) => {
+                    // ignore clicks that originated from action buttons
+                    if (e.target.closest('.post-quick-actions')) return;
+                    setDetail(p);
+                  }}
+                >
+                  {p.coverImage ? (
+                    <div
+                      className="post-cover"
+                      style={{ backgroundImage: `url(${p.coverImage})` }}
+                    />
+                  ) : (
+                    <div className="post-cover placeholder">
+                      <span style={{ fontSize: 48 }}>{p.category?.icon || '📝'}</span>
+                    </div>
+                  )}
+                  <div className="post-body">
+                    <div className="post-meta">
+                      <span
+                        className="badge"
+                        style={{
+                          background: (p.category?.color || '#FF6A00') + '22',
+                          color: p.category?.color || '#FF6A00',
+                        }}
+                      >
+                        {p.category?.icon} {p.category?.name || 'Sin categoría'}
+                      </span>
+                      <span className={`status ${p.status}`}>
+                        {p.status === 'publicado' ? '✅ Publicado' : '📝 Borrador'}
+                      </span>
+                    </div>
+                    <h3>{p.title}</h3>
+                    {p.excerpt && <p className="excerpt">{p.excerpt}</p>}
+                    <div className="post-footer">
+                      <span className="muted small">{timeAgo(p.updatedAt)}</span>
+                      <span className="muted small">
+                        {(p.images?.length || 0) +
+                          (p.videos?.length || 0) +
+                          (p.documents?.length || 0)}{' '}
+                        adjuntos · {p.comments?.length || 0} notas
+                      </span>
+                    </div>
+                    <div
+                      className="post-quick-actions"
+                      onClick={(e) => e.stopPropagation()}
+                      onMouseDown={(e) => e.stopPropagation()}
+                    >
+                      {editable && (
+                        <>
+                          <button
+                            className="btn ghost small"
+                            onClick={(e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              openEdit(p);
+                            }}
+                            onMouseDown={(e) => e.stopPropagation()}
+                            title="Editar publicación"
+                          >
+                            ✏️ Editar
+                          </button>
+                          <button
+                            className="btn ghost small"
+                            onClick={(e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              togglePublish(p);
+                            }}
+                            onMouseDown={(e) => e.stopPropagation()}
+                            title={
+                              p.status === 'publicado'
+                                ? 'Pasar a borrador'
+                                : 'Publicar'
+                            }
+                          >
+                            {p.status === 'publicado' ? '⏸ Borrador' : '▶ Publicar'}
+                          </button>
+                          <button
+                            className="btn ghost danger small"
+                            onClick={(e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              removePost(p);
+                            }}
+                            onMouseDown={(e) => e.stopPropagation()}
+                            title="Eliminar publicación"
+                          >
+                            🗑
+                          </button>
+                        </>
+                      )}
+                      {!editable && (
+                        <span className="muted small">Solo lectura</span>
+                      )}
+                    </div>
+                  </div>
+                </article>
+              );
+            })}
+          </div>
+        )}
       </div>
 
       {/* ===== create/edit modal ===== */}
@@ -364,7 +555,7 @@ export default function Blog() {
         <div className="modal-backdrop" onClick={closeForm}>
           <div className="modal large" onClick={(e) => e.stopPropagation()}>
             <header className="modal-header">
-              <h2>{editing._id ? 'Editar publicación' : 'Nueva publicación'}</h2>
+              <h2>{editing._id ? '✏️ Editar publicación' : '＋ Nueva publicación'}</h2>
               <button className="close" onClick={closeForm} aria-label="Cerrar">×</button>
             </header>
             <form onSubmit={savePost} className="form">
@@ -378,6 +569,7 @@ export default function Blog() {
                   onChange={(e) => setForm({ ...form, title: e.target.value })}
                   placeholder="Título de la publicación"
                   required
+                  autoFocus
                 />
               </label>
               <div className="row two">
@@ -389,7 +581,7 @@ export default function Blog() {
                     onChange={(e) => setForm({ ...form, category: e.target.value })}
                     required
                   >
-                    <option value="">Selecciona...</option>
+                    <option value="">Selecciona…</option>
                     {categories.map((c) => (
                       <option key={c._id} value={c._id}>
                         {c.icon} {c.name}
@@ -404,8 +596,8 @@ export default function Blog() {
                     value={form.status}
                     onChange={(e) => setForm({ ...form, status: e.target.value })}
                   >
-                    <option value="borrador">Borrador</option>
-                    <option value="publicado">Publicado</option>
+                    <option value="borrador">📝 Borrador</option>
+                    <option value="publicado">✅ Publicado</option>
                   </select>
                 </label>
               </div>
@@ -416,18 +608,21 @@ export default function Blog() {
                   rows={2}
                   value={form.excerpt}
                   onChange={(e) => setForm({ ...form, excerpt: e.target.value })}
-                  placeholder="Resumen corto (aparece en la lista)"
+                  placeholder="Resumen corto (aparece en la lista y como descripción en redes)"
                   maxLength={500}
                 />
+                <span className="muted small">
+                  {form.excerpt.length}/500 caracteres
+                </span>
               </label>
               <label>
                 Contenido / Nota
                 <textarea
                   className="input"
-                  rows={8}
+                  rows={10}
                   value={form.body}
                   onChange={(e) => setForm({ ...form, body: e.target.value })}
-                  placeholder="Texto principal de la publicación. Puedes escribir notas largas, anuncios, tutoriales..."
+                  placeholder="Texto principal. Aquí puedes escribir notas largas, anuncios, tutoriales, fuentes, atribuciones…"
                 />
               </label>
               <label>
@@ -437,7 +632,7 @@ export default function Blog() {
                   type="text"
                   value={form.tags}
                   onChange={(e) => setForm({ ...form, tags: e.target.value })}
-                  placeholder="ej. anuncio, tutorial, dream-team"
+                  placeholder="ej. anuncio, tutorial, dream-team, gol, mundial"
                 />
               </label>
               <label>
@@ -449,13 +644,19 @@ export default function Blog() {
                   onChange={(e) => setForm({ ...form, coverImage: e.target.value })}
                   placeholder="https://... o sube una imagen después y pega su URL aquí"
                 />
+                {form.coverImage && (
+                  <div
+                    className="cover-preview"
+                    style={{ backgroundImage: `url(${form.coverImage})` }}
+                  />
+                )}
               </label>
               <div className="modal-actions">
                 <button type="button" className="btn ghost" onClick={closeForm}>
                   Cancelar
                 </button>
                 <button type="submit" className="btn primary" disabled={busy}>
-                  {busy ? 'Guardando...' : editing._id ? 'Guardar cambios' : 'Crear publicación'}
+                  {busy ? '⏳ Guardando…' : editing._id ? '💾 Guardar cambios' : '✨ Crear publicación'}
                 </button>
               </div>
             </form>
@@ -470,15 +671,27 @@ export default function Blog() {
           me={me}
           onClose={() => setDetail(null)}
           onEdit={(p) => {
+            if (!canEditPost(p)) {
+              alert('No tienes permisos para editar esta publicación');
+              return;
+            }
             setDetail(null);
             openEdit(p);
           }}
           onTogglePublish={async (p) => {
+            if (!canEditPost(p)) {
+              alert('No tienes permisos para cambiar el estado de esta publicación');
+              return;
+            }
             await togglePublish(p);
             const r = await api.get(`/blog/posts/${p._id}`);
             setDetail(r.data);
           }}
           onDelete={async (p) => {
+            if (!canEditPost(p)) {
+              alert('No tienes permisos para eliminar esta publicación');
+              return;
+            }
             await removePost(p);
             setDetail(null);
           }}
@@ -490,6 +703,7 @@ export default function Blog() {
           onRemoveLink={removeLink}
           onPostComment={postComment}
           onDeleteComment={deleteComment}
+          canEdit={canEditPost(detail)}
         />
       )}
 
@@ -500,8 +714,14 @@ export default function Blog() {
           onClose={() => setShowCatMgr(false)}
           onChange={async () => {
             await loadAll();
+            setToast({ type: 'success', text: 'Categorías actualizadas' });
           }}
         />
+      )}
+
+      {/* ===== toast notifications ===== */}
+      {toast && (
+        <div className={`toast toast-${toast.type}`}>{toast.text}</div>
       )}
     </Layout>
   );
@@ -523,6 +743,7 @@ function PostDetailModal({
   onRemoveLink,
   onPostComment,
   onDeleteComment,
+  canEdit,
 }) {
   const [tab, setTab] = useState('content');
   const [commentText, setCommentText] = useState('');
@@ -538,6 +759,12 @@ function PostDetailModal({
       setBusyComment(false);
     }
   }
+
+  const images = post.images || [];
+  const videos = post.videos || [];
+  const documents = post.documents || [];
+  const links = post.links || [];
+  const comments = post.comments || [];
 
   return (
     <div className="modal-backdrop" onClick={onClose}>
@@ -555,40 +782,71 @@ function PostDetailModal({
               >
                 {post.category?.icon} {post.category?.name}
               </span>
-              <span className={`status ${post.status}`}>{post.status}</span>
+              <span className={`status ${post.status}`}>
+                {post.status === 'publicado' ? '✅ Publicado' : '📝 Borrador'}
+              </span>
               <span className="muted small">
                 {post.publishedAt ? `Publicado ${timeAgo(post.publishedAt)}` : 'Sin publicar'}
               </span>
             </div>
           </div>
           <div className="actions">
-            <button className="btn ghost" onClick={() => onEdit(post)}>Editar</button>
-            <button className="btn ghost" onClick={() => onTogglePublish(post)}>
-              {post.status === 'publicado' ? '⏸ Pasar a borrador' : '▶ Publicar'}
-            </button>
-            <button className="btn danger" onClick={() => onDelete(post)}>Eliminar</button>
+            {canEdit && (
+              <>
+                <button className="btn ghost" onClick={() => onEdit(post)}>
+                  ✏️ Editar
+                </button>
+                <button className="btn ghost" onClick={() => onTogglePublish(post)}>
+                  {post.status === 'publicado' ? '⏸ Borrador' : '▶ Publicar'}
+                </button>
+                <button className="btn danger" onClick={() => onDelete(post)}>
+                  🗑 Eliminar
+                </button>
+              </>
+            )}
+            {!canEdit && (
+              <span className="muted small badge">Solo lectura</span>
+            )}
             <button className="close" onClick={onClose} aria-label="Cerrar">×</button>
           </div>
         </header>
 
         <div className="tabs">
-          <button className={`tab ${tab === 'content' ? 'active' : ''}`} onClick={() => setTab('content')}>
+          <button
+            className={`tab ${tab === 'content' ? 'active' : ''}`}
+            onClick={() => setTab('content')}
+          >
             📝 Contenido
           </button>
-          <button className={`tab ${tab === 'images' ? 'active' : ''}`} onClick={() => setTab('images')}>
-            🖼️ Imágenes ({post.images?.length || 0})
+          <button
+            className={`tab ${tab === 'images' ? 'active' : ''}`}
+            onClick={() => setTab('images')}
+          >
+            🖼️ Imágenes ({images.length})
           </button>
-          <button className={`tab ${tab === 'videos' ? 'active' : ''}`} onClick={() => setTab('videos')}>
-            🎬 Videos ({post.videos?.length || 0})
+          <button
+            className={`tab ${tab === 'videos' ? 'active' : ''}`}
+            onClick={() => setTab('videos')}
+          >
+            🎬 Videos ({videos.length})
           </button>
-          <button className={`tab ${tab === 'docs' ? 'active' : ''}`} onClick={() => setTab('docs')}>
-            📎 Documentos ({post.documents?.length || 0})
+          <button
+            className={`tab ${tab === 'docs' ? 'active' : ''}`}
+            onClick={() => setTab('docs')}
+          >
+            📎 Documentos ({documents.length})
           </button>
-          <button className={`tab ${tab === 'links' ? 'active' : ''}`} onClick={() => setTab('links')}>
-            🔗 Links ({post.links?.length || 0})
+          <button
+            className={`tab ${tab === 'links' ? 'active' : ''}`}
+            onClick={() => setTab('links')}
+          >
+            🔗 Links ({links.length})
           </button>
-          <button className={`tab ${tab === 'notes' ? 'active' : ''}`} onClick={() => setTab('notes')}>
-            💬 Notas ({post.comments?.length || 0})
+          <button
+            className={`tab ${tab === 'notes' ? 'active' : ''}`}
+            onClick={() => setTab('notes')}
+          >
+            💬 Notas ({comments.length})
           </button>
         </div>
 
@@ -614,64 +872,82 @@ function PostDetailModal({
                   ))}
                 </div>
               )}
-              <div className="muted small">👁 {post.views || 0} vistas · ✍️ {post.author?.name || '—'}</div>
+              <div className="muted small">
+                👁 {post.views || 0} vistas · ✍️ {post.author?.name || '—'}
+              </div>
             </div>
           )}
 
           {tab === 'images' && (
             <AttachmentGallery
+              key={`images-${post._id}-${images.length}`}
               kind="images"
-              files={detail.images || []}
-              onAttach={(files) => attachFiles(detail, 'images', files)}
-              onRemove={(fileId) => removeFile(detail, 'images', fileId)}
-              onBulkRemove={(ids) => bulkRemoveFiles(detail, 'images', ids)}
-              onSetCover={(fileId) => setCoverImage(detail, fileId)}
+              files={images}
+              onAttach={canEdit ? (files) => onAttach(post, 'images', files) : null}
+              onRemove={canEdit ? (fileId) => onRemoveFile(post, 'images', fileId) : null}
+              onBulkRemove={canEdit ? (ids) => onBulkRemove(post, 'images', ids) : null}
+              onSetCover={canEdit ? (fileId) => onSetCover(post, fileId) : null}
               accept="image/*"
               uploadLabel="Subir imágenes"
-              isCover={(file) => detail.coverImage && detail.coverImage === file.url}
+              isCover={(file) => post.coverImage && post.coverImage === file.url}
+              readOnly={!canEdit}
             />
           )}
           {tab === 'videos' && (
             <AttachmentGallery
+              key={`videos-${post._id}-${videos.length}`}
               kind="videos"
-              files={detail.videos || []}
-              onAttach={(files) => attachFiles(detail, 'videos', files)}
-              onRemove={(fileId) => removeFile(detail, 'videos', fileId)}
-              onBulkRemove={(ids) => bulkRemoveFiles(detail, 'videos', ids)}
+              files={videos}
+              onAttach={canEdit ? (files) => onAttach(post, 'videos', files) : null}
+              onRemove={canEdit ? (fileId) => onRemoveFile(post, 'videos', fileId) : null}
+              onBulkRemove={canEdit ? (ids) => onBulkRemove(post, 'videos', ids) : null}
               onSetCover={null}
               accept="video/*"
               uploadLabel="Subir videos"
               isCover={null}
+              readOnly={!canEdit}
             />
           )}
           {tab === 'docs' && (
             <AttachmentGallery
+              key={`docs-${post._id}-${documents.length}`}
               kind="documents"
-              files={detail.documents || []}
-              onAttach={(files) => attachFiles(detail, 'documents', files)}
-              onRemove={(fileId) => removeFile(detail, 'documents', fileId)}
-              onBulkRemove={(ids) => bulkRemoveFiles(detail, 'documents', ids)}
+              files={documents}
+              onAttach={canEdit ? (files) => onAttach(post, 'documents', files) : null}
+              onRemove={canEdit ? (fileId) => onRemoveFile(post, 'documents', fileId) : null}
+              onBulkRemove={canEdit ? (ids) => onBulkRemove(post, 'documents', ids) : null}
               onSetCover={null}
               accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.md,.zip,.rar,.7z,.csv"
               uploadLabel="Subir documentos"
               isCover={null}
+              readOnly={!canEdit}
             />
           )}
 
           {tab === 'links' && (
             <div>
-              <button className="btn primary" onClick={onAddLink}>＋ Agregar link</button>
-              {(!post.links || post.links.length === 0) && (
-                <p className="muted">Sin links todavía.</p>
+              {canEdit && (
+                <button className="btn primary" onClick={onAddLink}>
+                  ＋ Agregar link
+                </button>
               )}
+              {links.length === 0 && <p className="muted">Sin links todavía.</p>}
               <ul className="link-list">
-                {post.links?.map((l) => (
+                {links.map((l) => (
                   <li key={l._id}>
-                    <a href={l.url} target="_blank" rel="noreferrer">{l.title || l.url}</a>
+                    <a href={l.url} target="_blank" rel="noreferrer">
+                      <strong>{l.title || l.url}</strong>
+                    </a>
                     {l.description && <p className="muted small">{l.description}</p>}
-                    <button className="btn ghost danger small" onClick={() => onRemoveLink(l._id)}>
-                      Quitar
-                    </button>
+                    <span className="muted small">{l.url}</span>
+                    {canEdit && (
+                      <button
+                        className="btn ghost danger small"
+                        onClick={() => onRemoveLink(l._id)}
+                      >
+                        Quitar
+                      </button>
+                    )}
                   </li>
                 ))}
               </ul>
@@ -680,32 +956,30 @@ function PostDetailModal({
 
           {tab === 'notes' && (
             <div>
-              <div className="comment-composer">
-                <textarea
-                  className="input"
-                  rows={3}
-                  placeholder="Escribe una nota o comentario..."
-                  value={commentText}
-                  onChange={(e) => setCommentText(e.target.value)}
-                />
-                <button
-                  className="btn primary"
-                  onClick={submitComment}
-                  disabled={busyComment || !commentText.trim()}
-                >
-                  {busyComment ? 'Enviando...' : 'Publicar nota'}
-                </button>
-              </div>
-              {(!post.comments || post.comments.length === 0) && (
-                <p className="muted">Sin notas todavía.</p>
+              {canEdit && (
+                <div className="comment-composer">
+                  <textarea
+                    className="input"
+                    rows={3}
+                    placeholder="Escribe una nota o comentario interno…"
+                    value={commentText}
+                    onChange={(e) => setCommentText(e.target.value)}
+                  />
+                  <button
+                    className="btn primary"
+                    onClick={submitComment}
+                    disabled={busyComment || !commentText.trim()}
+                  >
+                    {busyComment ? 'Enviando…' : 'Publicar nota'}
+                  </button>
+                </div>
               )}
+              {comments.length === 0 && <p className="muted">Sin notas todavía.</p>}
               <ul className="comment-list">
-                {post.comments?.map((c) => {
+                {comments.map((c) => {
                   const authorId = c.author?._id || c.author;
                   const canDelete =
-                    me && (String(me._id) === String(authorId) ||
-                           me.role === 'admin' ||
-                           String(me._id) === String(post.author?._id || post.author));
+                    me && (String(me._id) === String(authorId) || me.role === 'admin');
                   return (
                     <li key={c._id} className="comment">
                       <div className="comment-head">
@@ -714,7 +988,10 @@ function PostDetailModal({
                       </div>
                       <p>{c.text}</p>
                       {canDelete && (
-                        <button className="btn ghost danger small" onClick={() => onDeleteComment(c._id)}>
+                        <button
+                          className="btn ghost danger small"
+                          onClick={() => onDeleteComment(c._id)}
+                        >
                           Eliminar
                         </button>
                       )}
@@ -740,26 +1017,39 @@ function AttachmentGallery({
   accept,
   uploadLabel,
   isCover,
+  readOnly,
 }) {
   const inputRef = useRef(null);
-  const [selected, setSelected] = useState(new Set()); // file _ids
-  const [lightboxIdx, setLightboxIdx] = useState(null); // index of image in lightbox, null=closed
+  const [selected, setSelected] = useState(new Set());
+  const [lightboxIdx, setLightboxIdx] = useState(null);
   const [uploading, setUploading] = useState(false);
+  const [dragOver, setDragOver] = useState(false);
 
   function pick() {
+    if (readOnly) return;
     inputRef.current?.click();
   }
 
-  async function onChange(e) {
-    const fl = Array.from(e.target.files || []);
-    if (fl.length === 0) return;
+  async function handleFiles(fl) {
+    if (!fl || fl.length === 0 || !onAttach) return;
     setUploading(true);
     try {
       await onAttach(fl);
     } finally {
       setUploading(false);
-      e.target.value = '';
+      if (inputRef.current) inputRef.current.value = '';
     }
+  }
+
+  async function onChange(e) {
+    await handleFiles(Array.from(e.target.files || []));
+  }
+
+  async function onDrop(e) {
+    e.preventDefault();
+    setDragOver(false);
+    if (readOnly) return;
+    await handleFiles(Array.from(e.dataTransfer.files || []));
   }
 
   function toggleSelect(fileId) {
@@ -788,7 +1078,6 @@ function AttachmentGallery({
     const isImg = (file.mimetype || '').startsWith('image/');
     const isVid = (file.mimetype || '').startsWith('video/');
     if (!isImg && !isVid) {
-      // documents — open in new tab
       window.open(file.url, '_blank', 'noopener,noreferrer');
       return;
     }
@@ -807,7 +1096,6 @@ function AttachmentGallery({
     setLightboxIdx((i) => (i < files.length - 1 ? i + 1 : 0));
   }
 
-  // keyboard navigation for lightbox
   useEffect(() => {
     if (lightboxIdx === null) return;
     function onKey(e) {
@@ -820,6 +1108,11 @@ function AttachmentGallery({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [lightboxIdx, files.length]);
 
+  // reset selection when files change
+  useEffect(() => {
+    setSelected(new Set());
+  }, [files.length]);
+
   const totalSize = files.reduce((sum, f) => sum + (f.size || 0), 0);
   const lightboxFile = lightboxIdx !== null ? files[lightboxIdx] : null;
 
@@ -827,16 +1120,28 @@ function AttachmentGallery({
     <div>
       {/* toolbar */}
       <div className="gallery-toolbar">
-        <input
-          ref={inputRef}
-          type="file"
-          accept={accept}
-          multiple
-          style={{ display: 'none' }}
-          onChange={onChange}
-        />
-        <button className="btn primary" onClick={pick} disabled={uploading}>
-          {uploading ? '⏳ Subiendo...' : `📤 ${uploadLabel}`}
+        {!readOnly && (
+          <input
+            ref={inputRef}
+            type="file"
+            accept={accept}
+            multiple
+            style={{ display: 'none' }}
+            onChange={onChange}
+          />
+        )}
+        <button
+          className="btn primary"
+          onClick={pick}
+          disabled={uploading || readOnly}
+          onDragOver={(e) => {
+            e.preventDefault();
+            setDragOver(true);
+          }}
+          onDragLeave={() => setDragOver(false)}
+          onDrop={onDrop}
+        >
+          {uploading ? '⏳ Subiendo…' : `📤 ${uploadLabel}`}
         </button>
         <span className="muted small">
           {files.length} {files.length === 1 ? 'archivo' : 'archivos'} · {fmtSize(totalSize)}
@@ -845,18 +1150,22 @@ function AttachmentGallery({
           {files.length > 0 && (
             <>
               {selected.size === 0 ? (
-                <button className="btn ghost small" onClick={selectAll}>
-                  ☑️ Seleccionar todos
-                </button>
+                !readOnly && (
+                  <button className="btn ghost small" onClick={selectAll}>
+                    ☑️ Seleccionar todos
+                  </button>
+                )
               ) : (
                 <>
                   <span className="muted small">{selected.size} seleccionados</span>
                   <button className="btn ghost small" onClick={clearSelection}>
                     Limpiar
                   </button>
-                  <button className="btn danger small" onClick={bulkDelete}>
-                    🗑 Eliminar {selected.size}
-                  </button>
+                  {!readOnly && (
+                    <button className="btn danger small" onClick={bulkDelete}>
+                      🗑 Eliminar {selected.size}
+                    </button>
+                  )}
                 </>
               )}
             </>
@@ -864,13 +1173,23 @@ function AttachmentGallery({
         </div>
       </div>
 
-      {files.length === 0 && (
-        <p className="muted" style={{ marginTop: 16 }}>
-          Sin archivos. Usa el botón "Subir" para agregar varios a la vez.
-        </p>
+      {dragOver && (
+        <div className="drop-zone active">
+          📥 Suelta los archivos aquí para subirlos
+        </div>
       )}
 
-      {/* gallery grid */}
+      {files.length === 0 && (
+        <div className="empty small">
+          <p>📎 Sin archivos.</p>
+          {!readOnly && (
+            <p className="muted small">
+              Usa el botón "Subir" o arrastra archivos aquí para agregar varios a la vez.
+            </p>
+          )}
+        </div>
+      )}
+
       <div className="gallery-grid">
         {files.map((f, idx) => {
           const isImg = (f.mimetype || '').startsWith('image/');
@@ -882,21 +1201,20 @@ function AttachmentGallery({
               key={f._id}
               className={`gallery-tile ${isSel ? 'selected' : ''} ${cover ? 'is-cover' : ''}`}
             >
-              {/* selection checkbox */}
-              <button
-                type="button"
-                className={`gallery-select ${isSel ? 'on' : ''}`}
-                onClick={() => toggleSelect(f._id)}
-                title={isSel ? 'Quitar de selección' : 'Seleccionar'}
-                aria-label="Seleccionar"
-              >
-                {isSel ? '✓' : ''}
-              </button>
+              {!readOnly && (
+                <button
+                  type="button"
+                  className={`gallery-select ${isSel ? 'on' : ''}`}
+                  onClick={() => toggleSelect(f._id)}
+                  title={isSel ? 'Quitar de selección' : 'Seleccionar'}
+                  aria-label="Seleccionar"
+                >
+                  {isSel ? '✓' : ''}
+                </button>
+              )}
 
-              {/* cover badge (images only) */}
               {cover && <span className="cover-badge">⭐ Portada</span>}
 
-              {/* preview */}
               <div className="gallery-preview" onClick={() => openLightbox(f, idx)}>
                 {isImg ? (
                   <img src={f.url} alt={f.filename} loading="lazy" />
@@ -907,14 +1225,15 @@ function AttachmentGallery({
                   </>
                 ) : (
                   <div className="doc-tile">
-                    <span className="file-icon-big">{fileIcon(f.mimetype, f.filename)}</span>
+                    <span className="file-icon-big">
+                      {fileIcon(f.mimetype, f.filename)}
+                    </span>
                     <span className="file-name-sm">{f.filename}</span>
                     <span className="muted small">{fmtSize(f.size)}</span>
                   </div>
                 )}
               </div>
 
-              {/* meta */}
               <div className="gallery-meta">
                 <span className="gallery-filename" title={f.filename}>
                   {f.filename.length > 24 ? f.filename.slice(0, 21) + '…' : f.filename}
@@ -922,7 +1241,6 @@ function AttachmentGallery({
                 <span className="muted small">{fmtSize(f.size)}</span>
               </div>
 
-              {/* actions */}
               <div className="gallery-actions">
                 <a
                   href={f.url}
@@ -943,21 +1261,22 @@ function AttachmentGallery({
                     ⭐
                   </button>
                 )}
-                <button
-                  type="button"
-                  className="btn ghost danger small"
-                  onClick={() => onRemove(f._id)}
-                  title="Eliminar"
-                >
-                  🗑
-                </button>
+                {!readOnly && onRemove && (
+                  <button
+                    type="button"
+                    className="btn ghost danger small"
+                    onClick={() => onRemove(f._id)}
+                    title="Eliminar"
+                  >
+                    🗑
+                  </button>
+                )}
               </div>
             </div>
           );
         })}
       </div>
 
-      {/* lightbox */}
       {lightboxFile && (
         <div className="lightbox-backdrop" onClick={closeLightbox}>
           <div className="lightbox" onClick={(e) => e.stopPropagation()}>
@@ -1010,6 +1329,7 @@ function CategoryManager({ categories, onClose, onChange }) {
   const [description, setDescription] = useState('');
   const [editingId, setEditingId] = useState(null);
   const [error, setError] = useState('');
+  const [q, setQ] = useState('');
 
   async function save() {
     if (!name.trim()) {
@@ -1057,22 +1377,27 @@ function CategoryManager({ categories, onClose, onChange }) {
     }
   }
 
-  const ICON_OPTIONS = ['📝', '📰', '🚀', '💡', '🔧', '🎨', '📊', '⚽', '🎵', '🎬', '📚', '✨', '🔥', '💼', '🌐'];
+  const ICON_OPTIONS = ['📝', '📰', '🚀', '💡', '🔧', '🎨', '📊', '⚽', '🎵', '🎬', '📚', '✨', '🔥', '💼', '🌐', '💻', '🎮', '🍔', '✈️', '🌍'];
+
+  const filtered = categories.filter((c) =>
+    !q || c.name.toLowerCase().includes(q.toLowerCase())
+  );
 
   return (
     <div className="modal-backdrop" onClick={onClose}>
-      <div className="modal" onClick={(e) => e.stopPropagation()}>
+      <div className="modal large" onClick={(e) => e.stopPropagation()}>
         <header className="modal-header">
-          <h2>Categorías del blog</h2>
+          <h2>⚙️ Categorías del blog</h2>
           <button className="close" onClick={onClose} aria-label="Cerrar">×</button>
         </header>
 
         {error && <div className="banner error">{error}</div>}
 
         <div className="form">
+          <h3>{editingId ? '✏️ Editar categoría' : '＋ Nueva categoría'}</h3>
           <div className="row two">
             <label>
-              {editingId ? 'Editar' : 'Nueva'} categoría *
+              Nombre *
               <input
                 className="input"
                 type="text"
@@ -1127,30 +1452,62 @@ function CategoryManager({ categories, onClose, onChange }) {
                   setColor('#FF6A00');
                   setIcon('📝');
                   setDescription('');
+                  setError('');
                 }}
               >
                 Cancelar edición
               </button>
             )}
             <button type="button" className="btn primary" onClick={save}>
-              {editingId ? 'Guardar cambios' : 'Crear categoría'}
+              {editingId ? '💾 Guardar cambios' : '✨ Crear categoría'}
             </button>
           </div>
         </div>
 
         <hr />
 
+        <div className="cat-mgr-list">
+          <input
+            type="text"
+            className="input"
+            placeholder="🔍 Buscar categoría…"
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+          />
+          <span className="muted small">
+            {filtered.length} de {categories.length} categorías
+          </span>
+        </div>
+
         <ul className="category-list">
-          {categories.length === 0 && <li className="muted">No hay categorías todavía.</li>}
-          {categories.map((c) => (
+          {filtered.length === 0 && (
+            <li className="muted">No hay categorías que coincidan.</li>
+          )}
+          {filtered.map((c) => (
             <li key={c._id}>
-              <span className="cat-badge" style={{ background: (c.color || '#FF6A00') + '22', color: c.color || '#FF6A00' }}>
+              <span
+                className="cat-badge"
+                style={{
+                  background: (c.color || '#FF6A00') + '22',
+                  color: c.color || '#FF6A00',
+                }}
+              >
                 {c.icon} {c.name}
               </span>
+              {c.description && (
+                <span className="muted small">{c.description}</span>
+              )}
               <span className="muted small">{c.postCount || 0} publicaciones</span>
               <div className="actions">
-                <button className="btn ghost small" onClick={() => startEdit(c)}>Editar</button>
-                <button className="btn ghost danger small" onClick={() => remove(c)}>Eliminar</button>
+                <button className="btn ghost small" onClick={() => startEdit(c)}>
+                  ✏️ Editar
+                </button>
+                <button
+                  className="btn ghost danger small"
+                  onClick={() => remove(c)}
+                >
+                  🗑 Eliminar
+                </button>
               </div>
             </li>
           ))}
