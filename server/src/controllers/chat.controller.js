@@ -3,6 +3,8 @@ import Message from '../models/Message.js';
 import User from '../models/User.js';
 import fs from 'fs';
 import { validateFile, categorizeFile } from '../lib/fileGuard.js';
+import { audit } from '../lib/audit.js';
+import { notify } from '../lib/notify.js';
 
 // Helper: build a stable pair key for direct chats (sorted ids joined by ':')
 function buildPairKey(userA, userB) {
@@ -225,6 +227,38 @@ export async function sendMessage(req, res, next) {
     const populated = await Message.findById(msg._id)
       .populate('sender', 'name email role')
       .lean();
+
+    // Notify every other participant — they should see a bell update.
+    // For direct chats this is just the other person; for groups it's everyone else.
+    const recipients = (conv.participants || [])
+      .map((p) => (p.user?._id || p.user)?.toString())
+      .filter((uid) => uid && uid !== req.user._id.toString());
+    const preview = (text.trim() || (attachments.length ? `📎 ${attachments.length} adjunto(s)` : '')).slice(0, 200);
+    for (const uid of recipients) {
+      notify({
+        recipient: uid,
+        type: 'chat.message',
+        title: `💬 ${req.user.name}`,
+        body: preview,
+        link: `/chat?conv=${id}`,
+        sourceType: 'Conversation',
+        sourceId: String(id),
+        actor: req.user._id,
+        actorName: req.user.name,
+        meta: { messageId: String(msg._id), hasAttachments: attachments.length > 0 },
+      });
+    }
+
+    // Audit
+    audit({
+      req,
+      action: 'chat.message',
+      category: 'chat',
+      targetType: 'Conversation',
+      targetId: id,
+      targetLabel: conv.title || `Chat con ${recipients.length} participante(s)`,
+      meta: { messageId: String(msg._id), recipients: recipients.length, hasAttachments: attachments.length > 0 },
+    });
 
     res.status(201).json(populated);
   } catch (err) { next(err); }

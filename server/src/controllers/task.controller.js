@@ -4,6 +4,8 @@ import mongoose from 'mongoose';
 import fs from 'fs';
 import { validateFile, categorizeFile } from '../lib/fileGuard.js';
 import { validateAssignee } from '../lib/assigneeValidator.js';
+import { audit, labelOf } from '../lib/audit.js';
+import { notify } from '../lib/notify.js';
 
 // Build a filter that shows tasks from projects where user is owner OR member,
 // OR tasks the user owns directly
@@ -56,6 +58,29 @@ export async function createTask(req, res, next) {
     const populated = await task.populate([
       'project', 'client', 'assignee', 'owner',
     ]);
+    audit({
+      req,
+      action: 'task.create',
+      category: 'task',
+      targetType: 'Task',
+      targetId: task._id,
+      targetLabel: task.title,
+      meta: { project: task.project?._id || null, assignee: task.assignee?._id || null, priority: task.priority },
+    });
+    // Notify the assignee (if different from the creator)
+    if (task.assignee && String(task.assignee._id) !== String(req.user._id)) {
+      notify({
+        recipient: task.assignee._id,
+        type: 'task.assigned',
+        title: `✅ Te asignaron: ${task.title}`,
+        body: task.description?.slice(0, 200) || 'Sin descripción',
+        link: '/tasks',
+        sourceType: 'Task',
+        sourceId: String(task._id),
+        actor: req.user._id,
+        actorName: req.user.name,
+      });
+    }
     res.status(201).json(populated);
   } catch (err) { next(err); }
 }
@@ -64,15 +89,23 @@ export async function updateTask(req, res, next) {
   try {
     // Validate assignee (if provided in update)
     let payload = req.body;
+    let beforeAssignee = null;
+    let beforeStatus = null;
     if ('assignee' in req.body) {
       // Need the current project's _id even if not being updated
-      const existing = await Task.findById(req.params.id).select('project');
+      const existing = await Task.findById(req.params.id).select('project assignee status title');
       if (!existing) return res.status(404).json({ message: 'Tarea no encontrada' });
       const projectId = 'project' in req.body ? req.body.project : existing.project;
       const assignee = await validateAssignee(projectId, req.body.assignee);
       payload = { ...req.body, assignee };
-    } else if ('project' in req.body && !req.body.project) {
-      // Removing the project is fine (no validation needed)
+      beforeAssignee = existing.assignee ? String(existing.assignee) : null;
+      beforeStatus = existing.status;
+    } else {
+      const existing = await Task.findById(req.params.id).select('assignee status');
+      if (existing) {
+        beforeAssignee = existing.assignee ? String(existing.assignee) : null;
+        beforeStatus = existing.status;
+      }
     }
     const filter = await buildUserTaskFilter(req.user._id);
     filter._id = req.params.id;
@@ -82,6 +115,49 @@ export async function updateTask(req, res, next) {
       .populate('assignee', 'name email')
       .populate('comments.author', 'name email');
     if (!task) return res.status(404).json({ message: 'Tarea no encontrada' });
+
+    const changes = [];
+    if (beforeAssignee !== null && String(task.assignee?._id || '') !== beforeAssignee) {
+      changes.push('assignee');
+      if (task.assignee && String(task.assignee._id) !== String(req.user._id)) {
+        notify({
+          recipient: task.assignee._id,
+          type: 'task.assigned',
+          title: `🔁 Te reasignaron: ${task.title}`,
+          body: task.description?.slice(0, 200) || 'Sin descripción',
+          link: '/tasks',
+          sourceType: 'Task',
+          sourceId: String(task._id),
+          actor: req.user._id,
+          actorName: req.user.name,
+        });
+      }
+    }
+    if (beforeStatus !== null && beforeStatus !== task.status) {
+      changes.push('status');
+      if (String(task.assignee?._id || '') !== String(req.user._id) && task.assignee) {
+        notify({
+          recipient: task.assignee._id,
+          type: 'task.status_changed',
+          title: `🔄 Estado: ${task.title}`,
+          body: `${beforeStatus} → ${task.status}`,
+          link: '/tasks',
+          sourceType: 'Task',
+          sourceId: String(task._id),
+          actor: req.user._id,
+          actorName: req.user.name,
+        });
+      }
+    }
+    audit({
+      req,
+      action: changes.includes('assignee') ? 'task.assign' : (changes.length ? 'task.update' : 'task.update'),
+      category: 'task',
+      targetType: 'Task',
+      targetId: task._id,
+      targetLabel: task.title,
+      meta: { changes, before: { assignee: beforeAssignee, status: beforeStatus }, after: { assignee: String(task.assignee?._id || ''), status: task.status } },
+    });
     res.json(task);
   } catch (err) { next(err); }
 }
@@ -104,6 +180,15 @@ export async function deleteTask(req, res, next) {
     cleanup(task.images);
     cleanup(task.videos);
     cleanup(task.documents);
+    audit({
+      req,
+      action: 'task.delete',
+      category: 'task',
+      targetType: 'Task',
+      targetId: task._id,
+      targetLabel: task.title,
+      severity: 'warning',
+    });
     res.json({ ok: true });
   } catch (err) { next(err); }
 }

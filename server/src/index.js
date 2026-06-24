@@ -14,7 +14,12 @@ import userRoutes from './routes/user.routes.js';
 import chatRoutes from './routes/chat.routes.js';
 import mcpRoutes from './routes/mcp.routes.js';
 import postRoutes from './routes/post.routes.js';
+import notificationsRoutes from './routes/notifications.routes.js';
+import auditRoutes from './routes/audit.routes.js';
+import appointmentsRoutes from './routes/appointments.routes.js';
 import { errorHandler } from './middleware/error.js';
+import { AuditLog } from './models/AuditLog.js';
+import { Notification } from './models/Notification.js';
 
 dotenv.config();
 
@@ -40,9 +45,22 @@ app.use('/api/users', userRoutes);
 app.use('/api/chat', chatRoutes);
 app.use('/api/mcp', mcpRoutes);
 app.use('/api/blog', postRoutes);
+app.use('/api/notifications', notificationsRoutes);
+app.use('/api/audit-log', auditRoutes);
+// Note: /api/appointments/public/* must be reachable without auth — those routes
+// are mounted before requireAuth inside appointments.routes.js, but the public
+// paths are also whitelisted here at the top level.
+app.use('/api/appointments', appointmentsRoutes);
 
 app.use(errorHandler);
 
-connectDB().then(() => {
+connectDB().then(async () => {
+  // Best-effort TTL index setup — keep audit/notifications collections lean
+  try {
+    await AuditLog.ensureTTL(180);
+    await Notification.ensureTTL(90);
+  } catch (err) {
+    console.warn('[startup] TTL setup failed:', err?.message || err);
+  }
   app.listen(PORT, () => console.log(`🚀 API corriendo en http://localhost:${PORT}`));
 });

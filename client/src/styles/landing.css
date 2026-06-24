@@ -1,0 +1,280 @@
+/* ============ Landing page ============ */
+.landing {
+  min-height: 100vh;
+  background: linear-gradient(180deg, #fffaf5 0%, #ffffff 30%);
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+}
+.landing-nav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 32px;
+  background: rgba(255, 255, 255, 0.85);
+  backdrop-filter: blur(10px);
+  border-bottom: 1px solid rgba(229, 231, 235, 0.5);
+  position: sticky;
+  top: 0;
+  z-index: 100;
+}
+.landing-brand {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  text-decoration: none;
+  color: inherit;
+  font-size: 18px;
+}
+.landing-logo {
+  font-size: 24px;
+  color: #FF6A00;
+}
+.landing-brand strong { color: #1a1a1a; }
+.landing-brand span { color: #6b7280; }
+.landing-nav-links {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+}
+.landing-nav-links a {
+  color: #4b5563;
+  text-decoration: none;
+  font-size: 14px;
+  font-weight: 500;
+  transition: color 0.15s;
+}
+.landing-nav-links a:hover { color: #FF6A00; }
+.landing-cta {
+  background: #FF6A00;
+  color: white;
+  padding: 10px 20px;
+  border-radius: 8px;
+  text-decoration: none;
+  font-weight: 600;
+  font-size: 14px;
+  transition: all 0.15s;
+  border: none;
+  cursor: pointer;
+  display: inline-block;
+}
+.landing-cta:hover { background: #ea580c; transform: translateY(-1px); box-shadow: 0 4px 12px rgba(255, 106, 0, 0.3); }
+.landing-cta.secondary {
+  background: white;
+  color: #FF6A00;
+  border: 1px solid #FF6A00;
+}
+.landing-cta.secondary:hover { background: #fff7ed; }
+.landing-cta.small { padding: 6px 12px; font-size: 13px; }
+
+.landing-hero {
+  display: grid;
+  grid-template-columns: 1.2fr 1fr;
+  gap: 48px;
+  align-items: center;
+  padding: 60px 32px;
+  max-width: 1280px;
+  margin: 0 auto;
+}
+.landing-hero-content { max-width: 560px; }
+.landing-eyebrow {
+  display: inline-block;
+  background: #fff7ed;
+  color: #FF6A00;
+  padding: 4px 12px;
+  border-radius: 20px;
+  font-size: 13px;
+  font-weight: 600;
+  margin-bottom: 16px;
+}
+.landing-hero h1 {
+  font-size: 56px;
+  line-height: 1.1;
+  margin: 0 0 20px;
+  font-weight: 800;
+  color: #1a1a1a;
+  letter-spacing: -0.02em;
+}
+.landing-accent { color: #FF6A00; }
+.landing-sub {
+  font-size: 18px;
+  line-height: 1.6;
+  color: #4b5563;
+  margin: 0 0 28px;
+}
+.landing-hero-actions { display: flex; gap: 12px; flex-wrap: wrap; }
+.landing-trust {
+  margin-top: 28px;
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  color: #6b7280;
+  font-size: 14px;
+}
+
+.landing-hero-art {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  position: relative;
+}
+.landing-art-card {
+  background: white;
+  border: 1px solid #e5e7eb;
+  border-radius: 16px;
+  padding: 32px 24px;
+  font-size: 16px;
+  font-weight: 600;
+  text-align: center;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.04);
+  animation: float 4s ease-in-out infinite;
+}
+.landing-art-card:nth-child(2) { animation-delay: 0.5s; transform: translateY(20px); }
+.landing-art-card:nth-child(3) { animation-delay: 1s; transform: translateY(-10px); }
+.landing-art-card:nth-child(4) { animation-delay: 1.5s; transform: translateY(15px); }
+@keyframes float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-8px); }
+}
+.landing-art-card:nth-child(2) { animation-name: float2; animation-delay: 0.5s; }
+@keyframes float2 {
+  0%, 100% { transform: translateY(20px); }
+  50% { transform: translateY(12px); }
+}
+
+.landing-features {
+  padding: 60px 32px;
+  max-width: 1280px;
+  margin: 0 auto;
+  background: white;
+}
+.landing-features h2 {
+  font-size: 36px;
+  text-align: center;
+  margin: 0 0 40px;
+  font-weight: 800;
+  color: #1a1a1a;
+}
+.landing-feat-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 24px;
+}
+.landing-feat {
+  background: #fafafa;
+  border: 1px solid #e5e7eb;
+  border-radius: 16px;
+  padding: 24px;
+  transition: all 0.2s;
+}
+.landing-feat:hover { transform: translateY(-2px); box-shadow: 0 8px 24px rgba(0,0,0,0.06); }
+.landing-feat-icon {
+  font-size: 36px;
+  display: block;
+  margin-bottom: 12px;
+}
+.landing-feat h3 {
+  font-size: 18px;
+  margin: 0 0 8px;
+  color: #1a1a1a;
+}
+.landing-feat p {
+  margin: 0;
+  color: #6b7280;
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.landing-booking {
+  padding: 60px 32px;
+  background: linear-gradient(180deg, #fff7ed 0%, #ffffff 100%);
+}
+.landing-booking-wrap {
+  max-width: 1280px;
+  margin: 0 auto;
+  background: white;
+  border: 1px solid #e5e7eb;
+  border-radius: 20px;
+  padding: 40px;
+  box-shadow: 0 12px 40px rgba(255, 106, 0, 0.08);
+}
+.landing-booking-head { text-align: center; margin-bottom: 32px; }
+.landing-booking-head h2 {
+  font-size: 32px;
+  margin: 0 0 8px;
+  font-weight: 800;
+  color: #1a1a1a;
+}
+.landing-booking-head p { margin: 0; }
+
+.landing-booking-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 24px;
+}
+.landing-step h3 {
+  font-size: 16px;
+  margin: 0 0 12px;
+  color: #1a1a1a;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.step-num {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: #FF6A00;
+  color: white;
+  font-size: 14px;
+  font-weight: 700;
+  margin-right: 8px;
+}
+
+.landing-success {
+  text-align: center;
+  padding: 40px 20px;
+}
+.landing-success h3 {
+  font-size: 24px;
+  margin: 16px 0;
+  color: #10b981;
+}
+.landing-success .actions {
+  display: flex;
+  gap: 12px;
+  justify-content: center;
+  margin-top: 20px;
+  flex-wrap: wrap;
+}
+
+.landing-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 24px 32px;
+  background: #1a1a1a;
+  color: #9ca3af;
+  font-size: 13px;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+.landing-footer a { color: #FF6A00; text-decoration: none; }
+.landing-footer a:hover { text-decoration: underline; }
+
+@media (max-width: 900px) {
+  .landing-hero { grid-template-columns: 1fr; padding: 32px 16px; }
+  .landing-hero h1 { font-size: 36px; }
+  .landing-hero-art { display: none; }
+  .landing-booking-wrap { padding: 24px; }
+  .landing-booking-grid { grid-template-columns: 1fr; }
+  .landing-features { padding: 32px 16px; }
+  .landing-features h2 { font-size: 24px; }
+  .landing-booking { padding: 32px 16px; }
+  .landing-booking-head h2 { font-size: 24px; }
+  .landing-nav { padding: 12px 16px; }
+  .landing-nav-links { gap: 12px; }
+  .landing-nav-links a { font-size: 13px; }
+  .slot-grid { grid-template-columns: repeat(3, 1fr); }
+}

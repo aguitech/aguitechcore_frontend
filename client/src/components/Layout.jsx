@@ -1,18 +1,23 @@
 import { useState, useEffect } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext.jsx';
+import NotificationBell from './NotificationBell.jsx';
 
 const NAV_BASE = [
   { to: '/dashboard', label: 'Dashboard', icon: '📊' },
   { to: '/clients', label: 'Clientes', icon: '👥' },
   { to: '/projects', label: 'Proyectos', icon: '📁' },
   { to: '/tasks', label: 'Tareas', icon: '✅' },
-  { to: '/calendar', label: 'Calendario', icon: '📅' },
+  { to: '/appointments', label: 'Citas', icon: '📅' },
+  { to: '/calendar', label: 'Calendario', icon: '🗓️' },
   { to: '/chat', label: 'Chat', icon: '💬' },
   { to: '/blog', label: 'Blog', icon: '📰' },
 ];
 
-const NAV_ADMIN = { to: '/users', label: 'Usuarios', icon: '👤' };
+const NAV_ADMIN = [
+  { to: '/users', label: 'Usuarios', icon: '👤' },
+  { to: '/audit-log', label: 'Bitácora', icon: '📋' },
+];
 
 export default function Layout({ children }) {
   const { user, logout } = useAuth();
@@ -54,7 +59,7 @@ export default function Layout({ children }) {
 
   const navItems = [
     ...NAV_BASE,
-    ...(user?.role === 'admin' ? [NAV_ADMIN] : []),
+    ...(user?.role === 'admin' ? NAV_ADMIN : []),
     { to: '/profile', label: 'Perfil', icon: '⚙️' },
   ];
 
@@ -119,7 +124,14 @@ export default function Layout({ children }) {
         </div>
       </aside>
 
-      <main className="main">{children}</main>
+      <main className="main">
+        {/* Top bar with notification bell */}
+        <div className="topbar">
+          <div className="topbar-spacer" />
+          <NotificationBell />
+        </div>
+        {children}
+      </main>
     </div>
   );
 }
