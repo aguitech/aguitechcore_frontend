@@ -46,6 +46,7 @@ os.makedirs(VID_DIR, exist_ok=True)
 
 # Categories registry — name → (icon, color). New ones auto-created.
 CATEGORY_REGISTRY = {
+    # Originals
     "Política": ("🏛️", "#DC2626"),
     "Economía": ("💰", "#16A34A"),
     "Seguridad": ("🛡️", "#1E40AF"),
@@ -58,6 +59,20 @@ CATEGORY_REGISTRY = {
     "Cultura": ("🎨", "#9333EA"),
     "Ciencia": ("🔬", "#0284C7"),
     "Salud": ("🏥", "#059669"),
+    # ===== NEW SLOTS (nighttime + lifestyle) =====
+    "Internacional": ("🌐", "#0891B2"),       # Geopolítica + análisis
+    "Geopolítica": ("🗺️", "#7C2D12"),         # Conflictos, diplomacia, fronteras
+    "Bienestar": ("🧘", "#14B8A6"),           # Salud mental, hábitos, longevidad
+    "Vida Saludable": ("🥗", "#65A30D"),      # Nutrición, ejercicio, sueño
+    "Cripto": ("₿", "#F59E0B"),               # Bitcoin, ethereum, DeFi, regulación
+    "Mercados": ("📈", "#0EA5E9"),            # Bolsas, futuros, commodities
+    "Finanzas Personales": ("💳", "#10B981"), # Ahorro, inversión, crédito, deudas
+    "Sustentabilidad": ("🌱", "#16A34A"),     # Cambio climático, ESG, medio ambiente
+    "Hogar": ("🏡", "#A16207"),               # Decoración, DIY, mantenimiento
+    "Familia": ("👨‍👩‍👧", "#EC4899"),             # Parenting, relaciones, educación
+    "Viajes": ("✈️", "#06B6D4"),              # Destinos, tips, aviación
+    "Gastronomía": ("🍴", "#DC2626"),         # Recetas, restaurantes, tendencias
+    "Salud Mental": ("🧠", "#8B5CF6"),        # Ansiedad, depresión, terapia
 }
 
 # Editorial slots — each fires at a different time of day with a
@@ -128,6 +143,72 @@ SLOT_PROFILES = {
         ("Economía", "criptomonedas bitcoin ethereum hoy"),
         ("Cultura", "estreno cine taquillas México hoy"),
     ],
+    # ===== NEW SLOTS: 5 horarios adicionales (madrugada + lifestyle) =====
+    "midnight_world": [
+        # 00:30 — Internacional + Geopolítica (Asia abre, Europa cierra)
+        ("Internacional", "geopolítica mundo hoy Estados Unidos China"),
+        ("Geopolítica", "guerra conflicto internacional noticias hoy"),
+        ("Internacional", "Europa noticias hoy análisis"),
+        ("Geopolítica", "OTAN ONU diplomacia hoy"),
+        ("Internacional", "Asia noticias hoy Japón Corea India"),
+        ("Geopolítica", "Rusia Ucrania Medio Oriente hoy"),
+        ("Internacional", "Latinoamérica análisis hoy"),
+        ("Internacional", "elecciones mundo hoy política internacional"),
+        ("Mundo", "tratados comerciales internacionales hoy"),
+        ("Internacional", "crisis humanitaria refugiados noticias hoy"),
+    ],
+    "deep_wellness": [
+        # 02:30 — Bienestar + Vida Saludable + Salud Mental (insomnes)
+        ("Bienestar", "bienestar salud mental hábitos hoy"),
+        ("Vida Saludable", "nutrición alimentación saludable hoy"),
+        ("Salud Mental", "ansiedad estrés manejo técnicas hoy"),
+        ("Bienestar", "meditación mindfulness beneficios hoy"),
+        ("Vida Saludable", "ejercicio fitness rutina hoy"),
+        ("Bienestar", "sueño calidad descanso consejos hoy"),
+        ("Salud Mental", "terapia psicología bienestar emocional hoy"),
+        ("Vida Saludable", "dieta saludable recetas bienestar hoy"),
+        ("Bienestar", "longevidad envejecimiento saludable hoy"),
+        ("Salud Mental", "autoestima crecimiento personal hoy"),
+    ],
+    "pre_market_finance": [
+        # 04:30 — Mercados + Cripto + Finanzas Personales (pre-market Asia)
+        ("Mercados", "bolsa mercados Asia hoy Tokio Hong Kong"),
+        ("Cripto", "Bitcoin Ethereum precio hoy análisis"),
+        ("Mercados", "futuros NYSE S&P 500 Dow Jones hoy"),
+        ("Cripto", "criptomonedas altcoins DeFi noticias hoy"),
+        ("Finanzas Personales", "ahorro inversión consejos financieros hoy"),
+        ("Mercados", "petróleo oro commodities precio hoy"),
+        ("Cripto", "regulación cripto Bitcoin ETF noticias hoy"),
+        ("Finanzas Personales", "tarjetas crédito deudas manejo hoy"),
+        ("Mercados", "peso mexicano dólar tipo de cambio apertura hoy"),
+        ("Finanzas Personales", "retiro AFP pensiones planning hoy"),
+    ],
+    "breakfast_brief": [
+        # 07:30 — Economía + Internacional + Mercados (entre 6am y 9am)
+        ("Economía", "economía global mercados apertura hoy"),
+        ("Internacional", "noticias internacionales hoy análisis"),
+        ("Economía", "comercio internacional aranceles hoy"),
+        ("Mercados", "wall street apertura bursátil hoy"),
+        ("Economía", "Banxico política monetaria decisión hoy"),
+        ("Internacional", "Banco Central Federal Reserve noticias hoy"),
+        ("Economía", "inflación IPC datos hoy"),
+        ("Mercados", "divisas forex euro yen libra hoy"),
+        ("Economía", "crecimiento PIB economía hoy"),
+        ("Sustentabilidad", "energía renovable transición ecológica hoy"),
+    ],
+    "afternoon_lifestyle": [
+        # 15:30 — Vida Saludable + Hogar + Familia + Viajes + Gastronomía
+        ("Vida Saludable", "vida saludable tips prácticos hoy"),
+        ("Hogar", "decoración hogar diseño interiores hoy"),
+        ("Familia", "parenting educación niños familia hoy"),
+        ("Viajes", "destinos turísticos tips viajes hoy"),
+        ("Gastronomía", "recetas cocina gastronomía hoy"),
+        ("Bienestar", "bienestar integral estilo de vida hoy"),
+        ("Hogar", "jardinería plantas hogar hoy"),
+        ("Familia", "relaciones familia tiempo de calidad hoy"),
+        ("Viajes", "aerolíneas vuelos ofertas hoy"),
+        ("Gastronomía", "restaurantes tendencias culinarias hoy"),
+    ],
 }
 
 # Legacy alias
@@ -147,6 +228,20 @@ COVER_UNSPLASH = {
     "Cultura": "https://images.unsplash.com/photo-1518998053901-5348d3961a04?w=1600&q=80",
     "Ciencia": "https://images.unsplash.com/photo-1532187863486-abf9dbad1b69?w=1600&q=80",
     "Salud": "https://images.unsplash.com/photo-1576091160550-2173dba999ef?w=1600&q=80",
+    # ===== NEW CATEGORIES (nighttime + lifestyle) =====
+    "Internacional": "https://images.unsplash.com/photo-1526778548025-fa2f459cd5c1?w=1600&q=80",
+    "Geopolítica": "https://images.unsplash.com/photo-1541872703-74c5e44368f9?w=1600&q=80",
+    "Bienestar": "https://images.unsplash.com/photo-1545389336-cf090694435e?w=1600&q=80",
+    "Vida Saludable": "https://images.unsplash.com/photo-1490645935967-10de6ba17061?w=1600&q=80",
+    "Cripto": "https://images.unsplash.com/photo-1518546305927-5a555bb7020d?w=1600&q=80",
+    "Mercados": "https://images.unsplash.com/photo-1611974789855-9c2a0a7236a3?w=1600&q=80",
+    "Finanzas Personales": "https://images.unsplash.com/photo-1556742502-ec7c0e9f34b1?w=1600&q=80",
+    "Sustentabilidad": "https://images.unsplash.com/photo-1466611653911-95081537e5b7?w=1600&q=80",
+    "Hogar": "https://images.unsplash.com/photo-1556909114-f6e7ad7d3136?w=1600&q=80",
+    "Familia": "https://images.unsplash.com/photo-1609220136736-443140cffec6?w=1600&q=80",
+    "Viajes": "https://images.unsplash.com/photo-1488646953014-85cb44e25828?w=1600&q=80",
+    "Gastronomía": "https://images.unsplash.com/photo-1504674900247-0877df9cc836?w=1600&q=80",
+    "Salud Mental": "https://images.unsplash.com/photo-1499209974431-9dddcece7f88?w=1600&q=80",
 }
 
 # Per-topic gallery: list of Unsplash photo URLs that fit the topic.
@@ -200,6 +295,98 @@ GALLERY_BANK = {
         "https://images.unsplash.com/photo-1582738411706-bfc8e691d1c2?w=1600&q=80",  # alt
         "https://images.unsplash.com/photo-1518709268805-4e9042af2176?w=1600&q=80",  # alt2
         "https://images.unsplash.com/photo-1554232456-8727aae0cfa4?w=1600&q=80",  # alt3
+    ],
+    # ===== NEW CATEGORY GALLERIES (nighttime + lifestyle) =====
+    "Internacional": [
+        "https://images.unsplash.com/photo-1526778548025-fa2f459cd5c1?w=1600&q=80",  # globe
+        "https://images.unsplash.com/photo-1551836022-d5d88e9218df?w=1600&q=80",  # city night
+        "https://images.unsplash.com/photo-1486520299386-6d106b22014b?w=1600&q=80",  # world
+        "https://images.unsplash.com/photo-1502920917128-1aa500764cbd?w=1600&q=80",  # map
+        "https://images.unsplash.com/photo-1451187580459-43490279c0fa?w=1600&q=80",  # earth
+    ],
+    "Geopolítica": [
+        "https://images.unsplash.com/photo-1541872703-74c5e44368f9?w=1600&q=80",  # diplomacy
+        "https://images.unsplash.com/photo-1591189863345-58c996a4daf7?w=1600&q=80",  # gov
+        "https://images.unsplash.com/photo-1561489413-985b06da5bee?w=1600&q=80",  # capital
+        "https://images.unsplash.com/photo-1577412647305-991150c7d163?w=1600&q=80",  # flags
+        "https://images.unsplash.com/photo-1526470608268-f674ce90ebd4?w=1600&q=80",  # summit
+    ],
+    "Bienestar": [
+        "https://images.unsplash.com/photo-1545389336-cf090694435e?w=1600&q=80",  # meditation
+        "https://images.unsplash.com/photo-1506126613408-eca07ce68773?w=1600&q=80",  # yoga
+        "https://images.unsplash.com/photo-1499209974431-9dddcece7f88?w=1600&q=80",  # calm
+        "https://images.unsplash.com/photo-1518609878373-06d740f60d8b?w=1600&q=80",  # wellness
+        "https://images.unsplash.com/photo-1474418397713-7ede21d49118?w=1600&q=80",  # zen
+    ],
+    "Vida Saludable": [
+        "https://images.unsplash.com/photo-1490645935967-10de6ba17061?w=1600&q=80",  # food
+        "https://images.unsplash.com/photo-1512621776951-a57141f2eefd?w=1600&q=80",  # veggies
+        "https://images.unsplash.com/photo-1494390248081-4e521a5940db?w=1600&q=80",  # nutrition
+        "https://images.unsplash.com/photo-1505751172876-fa1923c5c528?w=1600&q=80",  # fitness
+        "https://images.unsplash.com/photo-1545205597-3d9d02c29597?w=1600&q=80",  # healthy
+    ],
+    "Cripto": [
+        "https://images.unsplash.com/photo-1518546305927-5a555bb7020d?w=1600&q=80",  # btc
+        "https://images.unsplash.com/photo-1639762681485-074b7f938ba0?w=1600&q=80",  # crypto
+        "https://images.unsplash.com/photo-1621761191319-c6fb62004040?w=1600&q=80",  # coin
+        "https://images.unsplash.com/photo-1642542517806-0a2f0d76f4c1?w=1600&q=80",  # eth
+        "https://images.unsplash.com/photo-1518546305927-5a555bb7020d?w=1600&q=80",  # btc2
+    ],
+    "Mercados": [
+        "https://images.unsplash.com/photo-1611974789855-9c2a0a7236a3?w=1600&q=80",  # chart
+        "https://images.unsplash.com/photo-1590283603385-17ffb3a7f29f?w=1600&q=80",  # trading
+        "https://images.unsplash.com/photo-1535320903710-d993d3d77d29?w=1600&q=80",  # market
+        "https://images.unsplash.com/photo-1559526324-4b87b5e36e44?w=1600&q=80",  # stocks
+        "https://images.unsplash.com/photo-1518186285589-2f7649de83e0?w=1600&q=80",  # finance
+    ],
+    "Finanzas Personales": [
+        "https://images.unsplash.com/photo-1556742502-ec7c0e9f34b1?w=1600&q=80",  # budget
+        "https://images.unsplash.com/photo-1563013544-824ae1b704d3?w=1600&q=80",  # wallet
+        "https://images.unsplash.com/photo-1633158829585-23ba8f7c8caf?w=1600&q=80",  # savings
+        "https://images.unsplash.com/photo-1554224155-6726b3ff858f?w=1600&q=80",  # money
+        "https://images.unsplash.com/photo-1601597111158-2fceff292cdc?w=1600&q=80",  # market
+    ],
+    "Salud Mental": [
+        "https://images.unsplash.com/photo-1499209974431-9dddcece7f88?w=1600&q=80",  # mind
+        "https://images.unsplash.com/photo-1490730141103-6cac27aaab94?w=1600&q=80",  # peace
+        "https://images.unsplash.com/photo-1528715471579-d1bcf0ba5e83?w=1600&q=80",  # therapy
+        "https://images.unsplash.com/photo-1517021897933-0e0319cfbc28?w=1600&q=80",  # thought
+        "https://images.unsplash.com/photo-1499209974431-9dddcece7f88?w=1600&q=80",  # calm
+    ],
+    "Hogar": [
+        "https://images.unsplash.com/photo-1556909114-f6e7ad7d3136?w=1600&q=80",  # living room
+        "https://images.unsplash.com/photo-1505691938895-1758d7feb511?w=1600&q=80",  # interior
+        "https://images.unsplash.com/photo-1493809842364-78817add7ffb?w=1600&q=80",  # decor
+        "https://images.unsplash.com/photo-1565538810643-b5bdb714032a?w=1600&q=80",  # kitchen
+        "https://images.unsplash.com/photo-1513694203232-719a280e022f?w=1600&q=80",  # bedroom
+    ],
+    "Familia": [
+        "https://images.unsplash.com/photo-1609220136736-443140cffec6?w=1600&q=80",  # family
+        "https://images.unsplash.com/photo-1542038784456-1ea8e935640e?w=1600&q=80",  # kids
+        "https://images.unsplash.com/photo-1606216794074-735e91aa2c92?w=1600&q=80",  # parent
+        "https://images.unsplash.com/photo-1536640712-4d4c36ff0e4e?w=1600&q=80",  # together
+        "https://images.unsplash.com/photo-1503454537195-1dcabb73ffb9?w=1600&q=80",  # happy
+    ],
+    "Viajes": [
+        "https://images.unsplash.com/photo-1488646953014-85cb44e25828?w=1600&q=80",  # travel
+        "https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=1600&q=80",  # beach
+        "https://images.unsplash.com/photo-1469854523086-cc02fe5d8800?w=1600&q=80",  # city
+        "https://images.unsplash.com/photo-1530521954074-e64f6810b32d?w=1600&q=80",  # airplane
+        "https://images.unsplash.com/photo-1476514525535-07fb3b4ae5f1?w=1600&q=80",  # adventure
+    ],
+    "Gastronomía": [
+        "https://images.unsplash.com/photo-1504674900247-0877df9cc836?w=1600&q=80",  # food
+        "https://images.unsplash.com/photo-1473093226795-af9932fe5856?w=1600&q=80",  # dish
+        "https://images.unsplash.com/photo-1565299624946-b28f40a0ae38?w=1600&q=80",  # plate
+        "https://images.unsplash.com/photo-1495195134817-aeb325a55b65?w=1600&q=80",  # cook
+        "https://images.unsplash.com/photo-1490645935967-10de6ba17061?w=1600&q=80",  # meal
+    ],
+    "Sustentabilidad": [
+        "https://images.unsplash.com/photo-1466611653911-95081537e5b7?w=1600&q=80",  # nature
+        "https://images.unsplash.com/photo-1518531933037-91b2f5f229cc?w=1600&q=80",  # green
+        "https://images.unsplash.com/photo-1542601906990-b4d3fb778b09?w=1600&q=80",  # eco
+        "https://images.unsplash.com/photo-1500382017468-9049fed747ef?w=1600&q=80",  # forest
+        "https://images.unsplash.com/photo-1497436072909-60f360e1d4b1?w=1600&q=80",  # sustainability
     ],
 }
 
@@ -452,6 +639,20 @@ def build_post(c, category, query, force_gallery=False, force_video=False, activ
         "Cultura": "🎨 ",
         "Ciencia": "🔬 ",
         "Salud": "🏥 ",
+        # New categories
+        "Internacional": "🌐 ",
+        "Geopolítica": "🗺️ ",
+        "Bienestar": "🧘 ",
+        "Vida Saludable": "🥗 ",
+        "Cripto": "₿ ",
+        "Mercados": "📈 ",
+        "Finanzas Personales": "💳 ",
+        "Sustentabilidad": "🌱 ",
+        "Hogar": "🏡 ",
+        "Familia": "👨‍👩‍👧 ",
+        "Viajes": "✈️ ",
+        "Gastronomía": "🍴 ",
+        "Salud Mental": "🧠 ",
     }
     lead = editorial_leads.get(category, "📰 ")
 
@@ -517,6 +718,97 @@ def build_post(c, category, query, force_gallery=False, force_video=False, activ
             f"- **Evento: ** {lead_para[:200]}\n"
             "- **Boletos: ** disponibles en Ticketmaster y taquillas del recinto.\n"
             "- **Recomendación: ** llegar temprano para evitar filas."
+        )
+    elif category == "Internacional":
+        framing = (
+            "\n\n🌐 *Lo que hay que entender:*\n"
+            f"- **Hecho: ** {lead_para[:200]}\n"
+            "- **Lectura geopolítica: ** movimientos de poder en un mundo multipolar, implicaciones para la región.\n"
+            "- **Lo que sigue: ** reacciones de aliados, sanciones, cumbres o nuevas negociaciones."
+        )
+    elif category == "Geopolítica":
+        framing = (
+            "\n\n🗺️ *Lectura estratégica:*\n"
+            f"- **Conflicto: ** {lead_para[:200]}\n"
+            "- **Mapa de actores: ** potencias, bloques regionales, Organismos Multilaterales y su posicionamiento.\n"
+            "- **Implicaciones: ** impacto en cadenas de suministro, energía, migraciones y opinión pública global."
+        )
+    elif category == "Bienestar":
+        framing = (
+            "\n\n🧘 *Claves prácticas:*\n"
+            f"- **Práctica: ** {lead_para[:200]}\n"
+            "- **Beneficio: ** mejora en niveles de estrés, sueño, energía y claridad mental según estudios recientes.\n"
+            "- **Cómo empezar: ** sesiones cortas de 5-10 minutos al día, constancia más que duración."
+        )
+    elif category == "Vida Saludable":
+        framing = (
+            "\n\n🥗 *Lo que la ciencia dice:*\n"
+            f"- **Hallazgo: ** {lead_para[:200]}\n"
+            "- **Aplicación práctica: ** sustituciones simples en la dieta, rutinas cortas de movimiento, manejo del sueño.\n"
+            "- **Advertencia: ** consulte a un profesional de salud antes de cambiar hábitos radicalmente."
+        )
+    elif category == "Salud Mental":
+        framing = (
+            "\n\n🧠 *Lo que hay que saber:*\n"
+            f"- **Tema: ** {lead_para[:200]}\n"
+            "- **Señales: ** los especialistas recomiendan buscar ayuda profesional si los síntomas persisten más de 2 semanas.\n"
+            "- **Recursos: ** líneas de crisis 24/7 disponibles en México: 55-5259-8121 (SAPTEL), 800-290-0024 (Confía)."
+        )
+    elif category == "Cripto":
+        framing = (
+            "\n\n₿ *Movimiento del mercado:*\n"
+            f"- **Movimiento: ** {lead_para[:200]}\n"
+            "- **Análisis: ** soporte y resistencia clave, correlación con mercados tradicionales y apetito de riesgo global.\n"
+            "- **Advertencia: ** alta volatilidad, DYOR (haz tu propia investigación) antes de invertir, no es asesoría financiera."
+        )
+    elif category == "Mercados":
+        framing = (
+            "\n\n📈 *Movimientos clave:*\n"
+            f"- **Apertura: ** {lead_para[:200]}\n"
+            "- **Sectores: ** rotación entre tecnológicas, energía, financieras y consumo discrecional.\n"
+            "- **Volatilidad: ** el VIX se mantiene en rango, atención a datos macro de la semana."
+        )
+    elif category == "Finanzas Personales":
+        framing = (
+            "\n\n💳 *Tips accionables:*\n"
+            f"- **Tema: ** {lead_para[:200]}\n"
+            "- **Aplicación: ** automatizar ahorros, revisar gastos hormiga, comparar comisiones y tasas.\n"
+            "- **Regla de oro: ** fondo de emergencia de 3-6 meses de gastos antes de invertir en activos de riesgo."
+        )
+    elif category == "Sustentabilidad":
+        framing = (
+            "\n\n🌱 *Impacto real:*\n"
+            f"- **Iniciativa: ** {lead_para[:200]}\n"
+            "- **Alcance: ** comunidades, empresas y gobiernos involucrados; métricas de impacto ESG.\n"
+            "- **Tendencia: ** creciente presión regulatoria y de consumidores por prácticas sustentables."
+        )
+    elif category == "Hogar":
+        framing = (
+            "\n\n🏡 *Para tu casa:*\n"
+            f"- **Idea: ** {lead_para[:200]}\n"
+            "- **Inversión: ** opciones para todos los presupuestos, desde DIY hasta reformas integrales.\n"
+            "- **Tip: ** empezar por una habitación, no abrumarse con todo a la vez."
+        )
+    elif category == "Familia":
+        framing = (
+            "\n\n👨‍👩‍👧 *Para la familia:*\n"
+            f"- **Tema: ** {lead_para[:200]}\n"
+            "- **Aplicación: ** tiempo de calidad, comunicación asertiva, límites con tecnología, juego en familia.\n"
+            "- **Recordatorio: ** cada familia es única, adaptar las recomendaciones a tu contexto."
+        )
+    elif category == "Viajes":
+        framing = (
+            "\n\n✈️ *Para tu próxima aventura:*\n"
+            f"- **Destino: ** {lead_para[:200]}\n"
+            "- **Mejor temporada: ** clima, precios, multitudes según temporada alta/baja.\n"
+            "- **Tip: ** reservar con 6-8 semanas de anticipación suele dar mejor tarifa aérea."
+        )
+    elif category == "Gastronomía":
+        framing = (
+            "\n\n🍴 *Para la cocina:*\n"
+            f"- **Receta: ** {lead_para[:200]}\n"
+            "- **Ingredientes: ** opciones accesibles en supermercados mexicanos, sustituciones por temporada.\n"
+            "- **Tip: ** marinar con antelación intensifica sabores, deja reposar 30+ minutos."
         )
     else:
         framing = (
@@ -686,7 +978,7 @@ def main():
     ap.add_argument("--video-topics", type=int, default=2,
                     help="Number of topics that get a video (default 2)")
     ap.add_argument("--slot", type=str, default=None,
-                    help="Editorial slot: morning_briefing|mid_morning|lunchtime|evening|night_wrap")
+                    help="Editorial slot: morning_briefing|mid_morning|lunchtime|evening|night_wrap|midnight_world|deep_wellness|pre_market_finance|breakfast_brief|afternoon_lifestyle")
     ap.add_argument("--shuffle", action="store_true",
                     help="Shuffle topics within the active slot")
     ap.add_argument("--max-posts", type=int, default=10,
