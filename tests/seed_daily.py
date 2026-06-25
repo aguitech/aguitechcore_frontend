@@ -73,6 +73,7 @@ CATEGORY_REGISTRY = {
     "Viajes": ("✈️", "#06B6D4"),              # Destinos, tips, aviación
     "Gastronomía": ("🍴", "#DC2626"),         # Recetas, restaurantes, tendencias
     "Salud Mental": ("🧠", "#8B5CF6"),        # Ansiedad, depresión, terapia
+    "IA": ("🤖", "#06B6D4"),                  # Inteligencia Artificial (separada de Tecnología)
 }
 
 # Editorial slots — each fires at a different time of day with a
@@ -209,6 +210,72 @@ SLOT_PROFILES = {
         ("Viajes", "aerolíneas vuelos ofertas hoy"),
         ("Gastronomía", "restaurantes tendencias culinarias hoy"),
     ],
+    # ===== PHASE 3 SLOTS: Tech + IA + Cultura + Noticias (5 slots adicionales) =====
+    "tech_ai_wave1": [
+        # 11:00 — Tecnología + IA (pico actividad tech pre-almuerzo)
+        ("Tecnología", "tecnología gadgets smartphones lanzamiento hoy"),
+        ("IA", "inteligencia artificial GPT Claude Gemini noticias hoy"),
+        ("Tecnología", "Apple iPhone Mac noticias hoy"),
+        ("IA", "machine learning modelos IA abiertos hoy"),
+        ("Tecnología", "Google Android Pixel noticias hoy"),
+        ("IA", "OpenAI Anthropic Google DeepMind anuncio hoy"),
+        ("Tecnología", "ciberserseguridad hackeo ransomware hoy"),
+        ("IA", "IA generativa imágenes video texto hoy"),
+        ("Tecnología", "startups tecnología financiamiento hoy"),
+        ("IA", "IA en empresas productividad automatización hoy"),
+    ],
+    "tech_ai_wave2": [
+        # 14:00 — IA dominante + Tecnología (post-almuerzo, sesión profunda)
+        ("IA", "chatbots asistentes IA ChatGPT Claude Copilot hoy"),
+        ("IA", "IA agentes autónomos workflows hoy"),
+        ("Tecnología", "chips semiconductores NVIDIA Intel AMD hoy"),
+        ("IA", "regulación IA Europa EUA México hoy"),
+        ("Tecnología", "robotics humanoides Tesla Optimus hoy"),
+        ("IA", "IA salud medicina diagnóstico hoy"),
+        ("Tecnología", "computación cuántica IBM Google hoy"),
+        ("IA", "IA arte música creatividad hoy"),
+        ("Tecnología", "5G redes conectividad hoy"),
+        ("IA", "prompt engineering herramientas IA hoy"),
+    ],
+    "culture_news_burst": [
+        # 19:30 — Cultura + Mundo/Noticias (after-hours cultural + cierre)
+        ("Cultura", "cine estrenos cartelera México hoy"),
+        ("Mundo", "noticias internacionales hoy hemeroteca"),
+        ("Cultura", "museos exposiciones galería hoy"),
+        ("Mundo", "Estados Unidos política noticias hoy"),
+        ("Cultura", "literatura libros bestsellers lanzamientos hoy"),
+        ("Mundo", "Europa noticias hoy España Francia Alemania"),
+        ("Cultura", "música conciertos lanzamientos álbum hoy"),
+        ("Mundo", "Asia noticias hoy Japón Corea China India"),
+        ("Cultura", "arte contemporáneo diseño hoy"),
+        ("Mundo", "Latinoamérica noticias hoy Argentina Brasil Chile"),
+    ],
+    "culture_news_late": [
+        # 22:30 — Cultura + Sucesos + Política (pre-cierre cultural)
+        ("Cultura", "gastronomía restaurantes tendencias hoy"),
+        ("Política", "noticias política nacional hoy"),
+        ("Cultura", "teatro danza artes escénicas hoy"),
+        ("Política", "congreso reformas legislación hoy"),
+        ("Cultura", "tradiciones patrimonio cultural hoy"),
+        ("Sucesos", "noticias último momento hoy"),
+        ("Cultura", "farándula celebridades farándula hoy"),
+        ("Política", "elecciones partidos políticos hoy"),
+        ("Cultura", "series streaming Netflix Disney hoy"),
+        ("Sucesos", "clima tiempo pronóstico hoy"),
+    ],
+    "tech_ai_recap": [
+        # 03:30 — Tech + IA recap (insomnes tech, hemeroteca madrugada)
+        ("Tecnología", "tecnología resumen día hoy"),
+        ("IA", "inteligencia artificial análisis día hoy"),
+        ("Tecnología", "gadgets reviews comparativas hoy"),
+        ("IA", "AI papers research papers hoy"),
+        ("Tecnología", "blockchain Web3 cripto tecnología hoy"),
+        ("IA", "IA educación aprendizaje hoy"),
+        ("Tecnología", "gaming videojuegos esports hoy"),
+        ("IA", "IA seguridad deepfakes detección hoy"),
+        ("Tecnología", "espacio SpaceX NASA tecnología hoy"),
+        ("IA", "IA código programación developers hoy"),
+    ],
 }
 
 # Legacy alias
@@ -242,6 +309,7 @@ COVER_UNSPLASH = {
     "Viajes": "https://images.unsplash.com/photo-1488646953014-85cb44e25828?w=1600&q=80",
     "Gastronomía": "https://images.unsplash.com/photo-1504674900247-0877df9cc836?w=1600&q=80",
     "Salud Mental": "https://images.unsplash.com/photo-1499209974431-9dddcece7f88?w=1600&q=80",
+    "IA": "https://images.unsplash.com/photo-1677442136019-21780ecad995?w=1600&q=80",
 }
 
 # Per-topic gallery: list of Unsplash photo URLs that fit the topic.
@@ -387,6 +455,13 @@ GALLERY_BANK = {
         "https://images.unsplash.com/photo-1542601906990-b4d3fb778b09?w=1600&q=80",  # eco
         "https://images.unsplash.com/photo-1500382017468-9049fed747ef?w=1600&q=80",  # forest
         "https://images.unsplash.com/photo-1497436072909-60f360e1d4b1?w=1600&q=80",  # sustainability
+    ],
+    "IA": [
+        "https://images.unsplash.com/photo-1677442136019-21780ecad995?w=1600&q=80",  # AI brain
+        "https://images.unsplash.com/photo-1620712943543-bcc4688e7485?w=1600&q=80",  # AI robot
+        "https://images.unsplash.com/photo-1655720828018-edd2daec9349?w=1600&q=80",  # AI code
+        "https://images.unsplash.com/photo-1485827404703-89b55fcc595e?w=1600&q=80",  # robot
+        "https://images.unsplash.com/photo-1531746790731-6c087fecd65a?w=1600&q=80",  # AI future
     ],
 }
 
@@ -653,6 +728,7 @@ def build_post(c, category, query, force_gallery=False, force_video=False, activ
         "Viajes": "✈️ ",
         "Gastronomía": "🍴 ",
         "Salud Mental": "🧠 ",
+        "IA": "🤖 ",
     }
     lead = editorial_leads.get(category, "📰 ")
 
@@ -809,6 +885,13 @@ def build_post(c, category, query, force_gallery=False, force_video=False, activ
             f"- **Receta: ** {lead_para[:200]}\n"
             "- **Ingredientes: ** opciones accesibles en supermercados mexicanos, sustituciones por temporada.\n"
             "- **Tip: ** marinar con antelación intensifica sabores, deja reposar 30+ minutos."
+        )
+    elif category == "IA":
+        framing = (
+            "\n\n🤖 *Lo que cambia:*\n"
+            f"- **Anuncio: ** {lead_para[:200]}\n"
+            "- **Impacto: ** developers, empresas y usuarios podrán integrar estas capacidades en sus flujos de trabajo.\n"
+            "- **Por qué importa: ** la carrera por el liderazgo en IA sigue acelerándose con nuevos modelos cada semana."
         )
     else:
         framing = (
@@ -978,7 +1061,7 @@ def main():
     ap.add_argument("--video-topics", type=int, default=2,
                     help="Number of topics that get a video (default 2)")
     ap.add_argument("--slot", type=str, default=None,
-                    help="Editorial slot: morning_briefing|mid_morning|lunchtime|evening|night_wrap|midnight_world|deep_wellness|pre_market_finance|breakfast_brief|afternoon_lifestyle")
+                    help="Editorial slot: morning_briefing|mid_morning|lunchtime|evening|night_wrap|midnight_world|deep_wellness|pre_market_finance|breakfast_brief|afternoon_lifestyle|tech_ai_wave1|tech_ai_wave2|culture_news_burst|culture_news_late|tech_ai_recap")
     ap.add_argument("--shuffle", action="store_true",
                     help="Shuffle topics within the active slot")
     ap.add_argument("--max-posts", type=int, default=10,
