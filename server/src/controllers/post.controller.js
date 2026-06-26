@@ -250,6 +250,7 @@ export async function createPost(req, res, next) {
     const {
       title,
       excerpt,
+      summary,
       body,
       category,
       tags,
@@ -269,6 +270,7 @@ export async function createPost(req, res, next) {
       title: title.trim(),
       slug,
       excerpt: (excerpt || '').trim(),
+      summary: (summary || '').trim().slice(0, 400),
       body: body || '',
       category: cat._id,
       tags: Array.isArray(tags) ? tags.map((t) => String(t).trim()).filter(Boolean) : [],
@@ -304,12 +306,13 @@ export async function updatePost(req, res, next) {
     const post = await Post.findById(id);
     if (!post) return res.status(404).json({ msg: 'Publicación no encontrada' });
 
-    const { title, excerpt, body, category, tags, status, coverImage, links } = req.body || {};
+    const { title, excerpt, summary, body, category, tags, status, coverImage, links } = req.body || {};
     if (title !== undefined) post.title = title.trim();
     if (title && Post.slugify(title) !== post.slug) {
       post.slug = await uniqueSlug(Post.slugify(title), post._id);
     }
     if (excerpt !== undefined) post.excerpt = (excerpt || '').trim();
+    if (summary !== undefined) post.summary = (summary || '').trim().slice(0, 400);
     if (body !== undefined) post.body = body || '';
     if (coverImage !== undefined) post.coverImage = coverImage || '';
     if (category !== undefined) {

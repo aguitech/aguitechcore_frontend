@@ -448,6 +448,94 @@ Mañana más cobertura del WWDC que arranca mañana.""",
 ]
 
 
+# ======== EDITORIAL SUMMARY BUILDER ========
+# Same per-category voice logic as tests/seed_daily.py but for hardcoded posts.
+# Produces a 2-3 line bullet-driven "what changed + why it matters".
+SUMMARY_TEMPLATES = {
+    "Política": (
+        "📌 Hecho: {fact}\n"
+        "🎯 Por qué importa: redefine el equilibrio de poder en el corto plazo "
+        "y obliga a actores clave a posicionarse.\n"
+        "👀 A seguir: reacciones de oposición, bloques legislativos y próximos decretos."
+    ),
+    "Economía": (
+        "📌 Hecho: {fact}\n"
+        "💹 Impacto: mueve expectativas de inflación, tasas y tipo de cambio; "
+        "sectores sensibles reaccionan primero.\n"
+        "🎯 A seguir: lectura del Banxico, comportamiento del peso y reportes sectoriales."
+    ),
+    "Seguridad": (
+        "📌 Hecho: {fact}\n"
+        "🛡️ Impacto: fortalece (o replantea) la estrategia nacional de seguridad "
+        "y los operativos coordinados con estados.\n"
+        "👀 A seguir: cifras oficiales del SESNSP, reacciones de Gobernadores y próximos objetivos."
+    ),
+    "Fútbol": (
+        "📌 Hecho: {fact}\n"
+        "⚽ Impacto: cambia el panorama rumbo a la siguiente jornada, liguilla o "
+        "competición internacional.\n"
+        "🎯 A seguir: alineaciones confirmadas, lesiones y movimientos en la tabla."
+    ),
+    "Deportes": (
+        "📌 Hecho: {fact}\n"
+        "🏆 Impacto: redefine el favoritismo, ranking o clasificación según la disciplina.\n"
+        "👀 A seguir: próximas pruebas, rivales directos y el estado físico de los protagonistas."
+    ),
+    "Tecnología": (
+        "📌 Hecho: {fact}\n"
+        "💻 Impacto: developers y empresas ganan (o pierden) una capacidad clave "
+        "en su stack.\n"
+        "🎯 A seguir: documentación oficial, pricing, integraciones de terceros y comunidad."
+    ),
+    "Espectáculos": (
+        "📌 Hecho: {fact}\n"
+        "🎬 Impacto: marca agenda cultural y mueve la conversación en redes.\n"
+        "👀 A seguir: preventas, nominaciones y reacciones del público en las próximas semanas."
+    ),
+    "Sucesos": (
+        "📌 Hecho: {fact}\n"
+        "⚠️ Impacto: afecta directamente a comunidades involucradas y servicios de emergencia.\n"
+        "🎯 A seguir: cifras oficiales, zonas afectadas y recomendaciones de protección civil."
+    ),
+    "Mundo": (
+        "📌 Hecho: {fact}\n"
+        "🌍 Impacto: reconfigura la agenda internacional, mercados y opinión pública global.\n"
+        "👀 A seguir: posicionamiento de potencias, organismos multilaterales y medios aliados."
+    ),
+    "Cultura": (
+        "📌 Hecho: {fact}\n"
+        "🎨 Impacto: enriquece (o cuestiona) el canon y abre nuevas conversaciones en la escena cultural.\n"
+        "👀 A seguir: reseñas especializadas, temporada en cartel y recepción del público."
+    ),
+    "Ciencia": (
+        "📌 Hecho: {fact}\n"
+        "🔬 Impacto: aporta evidencia que puede cambiar protocolos, tratamientos o modelos teóricos.\n"
+        "🎯 A seguir: revisión por pares, replicaciones y aplicaciones prácticas en el corto plazo."
+    ),
+    "Salud": (
+        "📌 Hecho: {fact}\n"
+        "🏥 Impacto: puede modificar guías clínicas, campañas de prevención o acceso a servicios.\n"
+        "👀 A seguir: posicionamiento de la OMS, SSA, IMSS e industria farmacéutica."
+    ),
+}
+DEFAULT_TEMPLATE = (
+    "📌 Hecho: {fact}\n"
+    "🎯 Por qué importa: agrega contexto nuevo a la conversación y merece seguimiento.\n"
+    "👀 A seguir: reacciones oficiales y lecturas especializadas."
+)
+
+
+def build_summary(post):
+    """Build editorial summary (≤400 chars) for a hardcoded post dict."""
+    cat = post.get("category", "")
+    fact = (post.get("excerpt") or "").strip()[:260]
+    tpl = SUMMARY_TEMPLATES.get(cat, DEFAULT_TEMPLATE)
+    out = tpl.format(fact=fact)
+    if len(out) > 400:
+        out = out[:397].rsplit("\n", 1)[0] + "…"
+    return out
+
+
 # ======== MAIN ========
 def main():
     print(f"=== Seeding 10 posts for {datetime.now().strftime('%Y-%m-%d')} ===\n")
@@ -492,6 +580,7 @@ def main():
         _, body = c.post("/api/blog/posts", body={
             "title": p["title"],
             "excerpt": p["excerpt"],
+            "summary": build_summary(p),
             "body": p["body"],
             "category": cat_ids[p["category"]],
             "tags": p["tags"],

@@ -866,6 +866,7 @@ const tools = [
         total,
         items: items.map((p) => ({
           id: p._id, slug: p.slug, title: p.title, excerpt: p.excerpt,
+          summary: p.summary || '',
           status: p.status, publishedAt: p.publishedAt, createdAt: p.createdAt,
           coverImage: p.coverImage, views: p.views,
           category: p.category, author: p.author,
@@ -912,7 +913,8 @@ const tools = [
       type: 'object',
       properties: {
         title: { type: 'string', description: 'Título de la publicación (requerido)' },
-        excerpt: { type: 'string', description: 'Resumen corto (max 500)' },
+        excerpt: { type: 'string', description: 'Resumen corto de 1 línea (max 500)' },
+        summary: { type: 'string', description: 'Resumen editorial de 2-3 líneas con bullets de impacto (max 400). Opcional.' },
         body: { type: 'string', description: 'Contenido completo / nota' },
         category: { type: 'string', description: 'ID de la categoría (requerido)' },
         tags: { type: 'array', items: { type: 'string' }, description: 'Etiquetas' },
@@ -935,7 +937,7 @@ const tools = [
       required: ['title', 'category'],
       additionalProperties: false,
     },
-    handler: async (user, { title, excerpt, body, category, tags, status, cover_image_url, links }) => {
+    handler: async (user, { title, excerpt, summary, body, category, tags, status, cover_image_url, links }) => {
       if (!title || !title.trim()) throw Object.assign(new Error('Título requerido'), { status: 400 });
       if (!category || !/^[0-9a-f]{24}$/i.test(category)) {
         throw Object.assign(new Error('ID de categoría requerido'), { status: 400 });
@@ -954,6 +956,7 @@ const tools = [
         title: title.trim(),
         slug: candidate,
         excerpt: (excerpt || '').trim().slice(0, 500),
+        summary: (summary || '').trim().slice(0, 400),
         body: body || '',
         category: cat._id,
         tags: Array.isArray(tags) ? tags.map((t) => String(t).trim()).filter(Boolean) : [],
@@ -999,6 +1002,7 @@ const tools = [
         post_id: { type: 'string', description: 'ID de la publicación (requerido)' },
         title: { type: 'string' },
         excerpt: { type: 'string' },
+        summary: { type: 'string', description: 'Resumen editorial de 2-3 líneas (max 400)' },
         body: { type: 'string' },
         category: { type: 'string' },
         tags: { type: 'array', items: { type: 'string' } },
@@ -1009,7 +1013,7 @@ const tools = [
       required: ['post_id'],
       additionalProperties: false,
     },
-    handler: async (user, { post_id, title, excerpt, body, category, tags, status, cover_image_url, links }) => {
+    handler: async (user, { post_id, title, excerpt, summary, body, category, tags, status, cover_image_url, links }) => {
       const post = await Post.findById(post_id);
       if (!post) throw Object.assign(new Error('Publicación no encontrada'), { status: 404 });
       if (title !== undefined) post.title = title.trim();
@@ -1022,6 +1026,7 @@ const tools = [
         post.slug = candidate;
       }
       if (excerpt !== undefined) post.excerpt = excerpt.trim();
+      if (summary !== undefined) post.summary = summary.trim().slice(0, 400);
       if (body !== undefined) post.body = body;
       if (cover_image_url !== undefined) post.coverImage = cover_image_url;
       if (category !== undefined) {

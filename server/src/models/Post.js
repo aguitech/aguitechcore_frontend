@@ -17,6 +17,10 @@ const postSchema = new mongoose.Schema(
     title: { type: String, required: true, trim: true, maxlength: 200 },
     slug: { type: String, required: true, unique: true, trim: true, lowercase: true, index: true },
     excerpt: { type: String, trim: true, maxlength: 500, default: '' },
+    // Editorial summary — 2-3 line bullet-driven "what changed + why it matters" hook.
+    // Independent from `excerpt` (which is a one-liner). Seeded by tests/seed_daily.py
+    // per category. Safe to leave blank for hand-authored posts.
+    summary: { type: String, trim: true, maxlength: 400, default: '' },
     body: { type: String, trim: true, default: '' }, // plain text / markdown-ish note
     coverImage: { type: String, default: '' }, // url of an attached image (optional)
     category: {

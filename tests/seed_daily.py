@@ -732,13 +732,6 @@ def build_post(c, category, query, force_gallery=False, force_video=False, activ
     }
     lead = editorial_leads.get(category, "📰 ")
 
-    # Excerpt: 1-2 sentence summary (200 chars) with category voice
-    raw_excerpt = article_text[:400].replace("\n", " ").strip()
-    excerpt = raw_excerpt[:240].strip()
-    if len(excerpt) > 230:
-        excerpt = excerpt[:227].rstrip() + "..."
-    excerpt = lead + excerpt
-
     # Body: journalistic structure — Lead / Background / Why it matters / Source
     source_url = best["url"]
     source_domain = source_url.split("/")[2] if "/" in source_url else "fuente"
@@ -751,6 +744,166 @@ def build_post(c, category, query, force_gallery=False, force_video=False, activ
     lead_para = paragraphs[0][:500]
     context_para = paragraphs[1][:400] if len(paragraphs) > 1 else ""
     detail_para = paragraphs[2][:400] if len(paragraphs) > 2 else ""
+
+    # ===== Editorial summary (NEW) =====
+    # 2-3 lines, bullet-driven "what changed + why it matters". Independent
+    # field from `excerpt` (which stays a 1-line hook). Per-category voice.
+    fact = (paragraphs[0][:260].replace("\n", " ").strip()
+            if paragraphs else article_text[:260].replace("\n", " ").strip())
+    summary_templates = {
+        "Política": (
+            "📌 Hecho: {fact}\n"
+            "🎯 Por qué importa: redefine el equilibrio de poder en el corto plazo "
+            "y obliga a actores clave a posicionarse.\n"
+            "👀 A seguir: reacciones de oposición, bloques legislativos y próximos decretos."
+        ),
+        "Economía": (
+            "📌 Hecho: {fact}\n"
+            "💹 Impacto: mueve expectativas de inflación, tasas y tipo de cambio; "
+            "sectores sensibles reaccionan primero.\n"
+            "🎯 A seguir: lectura del Banxico, comportamiento del peso y reportes sectoriales."
+        ),
+        "Seguridad": (
+            "📌 Hecho: {fact}\n"
+            "🛡️ Impacto: fortalece (o replantea) la estrategia nacional de seguridad "
+            "y los operativos coordinados con estados.\n"
+            "👀 A seguir: cifras oficiales del SESNSP, reacciones de Gobernadores y próximos objetivos."
+        ),
+        "Fútbol": (
+            "📌 Hecho: {fact}\n"
+            "⚽ Impacto: cambia el panorama rumbo a la siguiente jornada, liguilla o "
+            "competición internacional.\n"
+            "🎯 A seguir: alineaciones confirmadas, lesiones y movimientos en la tabla."
+        ),
+        "Deportes": (
+            "📌 Hecho: {fact}\n"
+            "🏆 Impacto: redefine el favoritismo, ranking o clasificación según la disciplina.\n"
+            "👀 A seguir: próximas pruebas, rivales directos y el estado físico de los protagonistas."
+        ),
+        "Tecnología": (
+            "📌 Hecho: {fact}\n"
+            "💻 Impacto: developers y empresas ganan (o pierden) una capacidad clave "
+            "en su stack.\n"
+            "🎯 A seguir: documentación oficial, pricing, integraciones de terceros y comunidad."
+        ),
+        "Espectáculos": (
+            "📌 Hecho: {fact}\n"
+            "🎬 Impacto: marca agenda cultural y mueve la conversación en redes.\n"
+            "👀 A seguir: preventas, nominaciones y reacciones del público en las próximas semanas."
+        ),
+        "Sucesos": (
+            "📌 Hecho: {fact}\n"
+            "⚠️ Impacto: afecta directamente a comunidades involucradas y servicios de emergencia.\n"
+            "🎯 A seguir: cifras oficiales, zonas afectadas y recomendaciones de protección civil."
+        ),
+        "Mundo": (
+            "📌 Hecho: {fact}\n"
+            "🌍 Impacto: reconfigura la agenda internacional, mercados y opinión pública global.\n"
+            "👀 A seguir: posicionamiento de potencias, organismos multilaterales y medios aliados."
+        ),
+        "Cultura": (
+            "📌 Hecho: {fact}\n"
+            "🎨 Impacto: enriquece (o cuestiona) el canon y abre nuevas conversaciones en la escena cultural.\n"
+            "👀 A seguir: reseñas especializadas, temporada en cartel y recepción del público."
+        ),
+        "Ciencia": (
+            "📌 Hecho: {fact}\n"
+            "🔬 Impacto: aporta evidencia que puede cambiar protocolos, tratamientos o modelos teóricos.\n"
+            "🎯 A seguir: revisión por pares, replicaciones y aplicaciones prácticas en el corto plazo."
+        ),
+        "Salud": (
+            "📌 Hecho: {fact}\n"
+            "🏥 Impacto: puede modificar guías clínicas, campañas de prevención o acceso a servicios.\n"
+            "👀 A seguir: posicionamiento de la OMS, SSA, IMSS e industria farmacéutica."
+        ),
+        "Internacional": (
+            "📌 Hecho: {fact}\n"
+            "🌐 Impacto: mueve el tablero diplomático, comercial y de seguridad a escala regional.\n"
+            "🎯 A seguir: reacciones de aliados, sanciones, cumbres o nuevas negociaciones."
+        ),
+        "Geopolítica": (
+            "📌 Hecho: {fact}\n"
+            "🗺️ Impacto: altera el equilibrio de poder entre bloques y la lectura estratégica del conflicto.\n"
+            "👀 A seguir: movimientos de potencias, organismos multilaterales y rutas de suministro."
+        ),
+        "Bienestar": (
+            "📌 Hecho: {fact}\n"
+            "🧘 Impacto: ofrece (o cuestiona) una práctica concreta para reducir estrés y mejorar hábitos.\n"
+            "🎯 A seguir: validación científica, rutinas recomendadas y contraindicaciones."
+        ),
+        "Vida Saludable": (
+            "📌 Hecho: {fact}\n"
+            "🥗 Impacto: cambia (o confirma) lo que sabemos sobre nutrición, movimiento y descanso.\n"
+            "👀 A seguir: meta-análisis recientes, opinión de nutriólogos y guías oficiales."
+        ),
+        "Salud Mental": (
+            "📌 Hecho: {fact}\n"
+            "🧠 Impacto: visibiliza un tema que sigue estigmatizado y ofrece rutas de acompañamiento.\n"
+            "👀 A seguir: recursos de ayuda profesional, líneas de crisis y campañas públicas."
+        ),
+        "Cripto": (
+            "📌 Hecho: {fact}\n"
+            "₿ Impacto: mueve liquidez, sentiment y narrativas del ciclo; altcoins suelen amplificar.\n"
+            "⚠️ Advertencia: alta volatilidad. DYOR. No es asesoría financiera."
+        ),
+        "Mercados": (
+            "📌 Hecho: {fact}\n"
+            "📈 Impacto: sesgo sectorial, rotación entre value/growth y presión sobre activos refugio.\n"
+            "🎯 A seguir: datos macro de la semana, earnings y comentarios de bancos centrales."
+        ),
+        "Finanzas Personales": (
+            "📌 Hecho: {fact}\n"
+            "💳 Impacto: cambia una decisión concreta que afecta bolsillo, crédito o ahorro.\n"
+            "🎯 A seguir: comparar comisiones, leer letra chica y revisar tu colchón de emergencia."
+        ),
+        "Sustentabilidad": (
+            "📌 Hecho: {fact}\n"
+            "🌱 Impacto: acelera (o retrasa) la transición hacia prácticas ESG y energía limpia.\n"
+            "👀 A seguir: regulación, financiamiento verde y presión de consumidores e inversionistas."
+        ),
+        "Hogar": (
+            "📌 Hecho: {fact}\n"
+            "🏡 Impacto: una idea concreta para mejorar confort, funcionalidad o estética del hogar.\n"
+            "🎯 A seguir: opciones de presupuesto, materiales locales y tutoriales paso a paso."
+        ),
+        "Familia": (
+            "📌 Hecho: {fact}\n"
+            "👨‍👩‍👧 Impacto: aplica a la dinámica diaria de crianza, comunicación o educación en casa.\n"
+            "👀 A seguir: consejo de especialistas y adaptaciones según la edad de los hijos."
+        ),
+        "Viajes": (
+            "📌 Hecho: {fact}\n"
+            "✈️ Impacto: cambia (o confirma) el mejor momento, ruta o presupuesto para tu próximo viaje.\n"
+            "🎯 A seguir: seasonality, requisitos migratorios y tips de quien ya fue."
+        ),
+        "Gastronomía": (
+            "📌 Hecho: {fact}\n"
+            "🍴 Impacto: trae una receta, tendencia o técnica que se puede replicar en casa esta semana.\n"
+            "👀 A seguir: sustituciones por temporada, maridaje y reseñas de chefs locales."
+        ),
+        "IA": (
+            "📌 Hecho: {fact}\n"
+            "🤖 Impacto: developers, empresas y usuarios ganan (o pierden) capacidad clave en su flujo.\n"
+            "🎯 A seguir: benchmarks independientes, casos de uso reales y comentarios de la comunidad."
+        ),
+    }
+    tpl = summary_templates.get(
+        category,
+        "📌 Hecho: {fact}\n"
+        "🎯 Por qué importa: agrega contexto nuevo a la conversación y merece seguimiento.\n"
+        "👀 A seguir: reacciones oficiales y lecturas especializadas."
+    )
+    summary = tpl.format(fact=fact)
+    # Hard cap at 400 chars (Post.summary maxlength). Prefer cutting at a newline.
+    if len(summary) > 400:
+        summary = summary[:397].rsplit("\n", 1)[0] + "…"
+
+    # Excerpt: 1-line hook (kept short on purpose; the heavy lifting moved to summary)
+    raw_excerpt = article_text[:400].replace("\n", " ").strip()
+    excerpt = raw_excerpt[:240].strip()
+    if len(excerpt) > 230:
+        excerpt = excerpt[:227].rstrip() + "..."
+    excerpt = lead + excerpt
 
     # Editorial framing by category
     if category == "Fútbol":
@@ -952,6 +1105,7 @@ def build_post(c, category, query, force_gallery=False, force_video=False, activ
     return {
         "title": title,
         "excerpt": excerpt,
+        "summary": summary,
         "body": body,
         "tags": tags,
         "source_url": source_url,
@@ -1006,6 +1160,7 @@ def publish_post(c, post, cat_ids):
     _, body = c.req("POST", "/api/blog/posts", body={
         "title": post["title"],
         "excerpt": post["excerpt"],
+        "summary": post.get("summary", ""),
         "body": post["body"],
         "category": cat_id,
         "tags": post["tags"],
