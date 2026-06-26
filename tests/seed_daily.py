@@ -563,49 +563,616 @@ def html_to_text(html):
     return p.get_text()
 
 
-# ======== SEARCH (DuckDuckGo HTML — no API key needed) ========
-def search(query, limit=5):
-    """Search via Google News RSS. No API key needed. Returns [{title, url, snippet}]."""
-    try:
-        url = "https://news.google.com/rss/search?" + urllib.parse.urlencode({
-            "q": f"{query} when:1d",
-            "hl": "es-419",
-            "gl": "MX",
-            "ceid": "MX:es-419",
-        })
-        req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
-        with urllib.request.urlopen(req, timeout=20) as r:
-            xml = r.read().decode("utf-8", "replace")
-        results = []
-        # Each <item> has <title>, <link> (Google redirect URL), <description>
-        for item_match in re.finditer(r"<item>([\s\S]*?)</item>", xml):
-            item_xml = item_match.group(1)
-            t = re.search(r"<title>(?:<!\[CDATA\[)?(.+?)(?:\]\]>)?</title>", item_xml)
-            l = re.search(r"<link>(.+?)</link>", item_xml)
-            d = re.search(r"<description>(?:<!\[CDATA\[)?(.+?)(?:\]\]>)?</description>",
-                          item_xml, re.DOTALL)
-            if not t or not l:
-                continue
-            title = re.sub(r"<[^>]+>", "", t.group(1)).strip()
-            link = l.group(1).strip()
-            desc = ""
-            if d:
-                desc = re.sub(r"<[^>]+>", "", d.group(1)).strip()
-                desc = re.sub(r"\s+", " ", desc)[:300]
-            results.append({"title": title, "url": link, "snippet": desc})
-            if len(results) >= limit:
+# ======== SMART MAIN-CONTENT EXTRACTION ========
+# A small DOM walker that finds the <article>/<main>/role=main block, strips
+# nav/header/footer/aside/ads/share widgets/comments, and returns up to 5000
+# chars of clean main-content text. Stdlib only — no bs4.
+
+_MAIN_SELECTORS = [
+    re.compile(r"<article\b", re.IGNORECASE),
+    re.compile(r"<main\b", re.IGNORECASE),
+    re.compile(r"\brole\s*=\s*[\"']main[\"']", re.IGNORECASE),
+    re.compile(
+        r"\bid\s*=\s*[\"'][^\"']*"
+        r"(?:content|article|nota|cuerpo|story|entry|text|body)"
+        r"[^\"']*[\"']",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        r"<div[^>]*class\s*=\s*[\"'][^\"']*"
+        r"(?:article-content|note-body|entry-content|story-body|article-body|"
+        r"post-content|nota-body|content-body|main-content|article__body|post__body)"
+        r"[^\"']*[\"']",
+        re.IGNORECASE,
+    ),
+]
+
+_AD_CLASS = re.compile(
+    r"\b(?:ad|ads|advert|advertisement|sponsor|sponsored|promo|promocion|"
+    r"newsletter|publicidad|banner|popup)\b",
+    re.IGNORECASE,
+)
+_SKIP_CLASS = re.compile(
+    r"\b(?:share|sharing|social|related|recommend|recommendation|"
+    r"comment|comments|sidebar|breadcrumb|menu|toolbar|metadata|"
+    r"tags|tag-list|author-box|byline|paywall|subscribe|signup)\b",
+    re.IGNORECASE,
+)
+_STRIP_TAGS = ("script", "style", "noscript", "iframe", "form",
+               "header", "footer", "nav", "aside")
+
+
+def _extract_main_html(html):
+    """Return the substring of html that looks like the article body."""
+    cleaned = html
+    # First, drop obvious junk wholesale so they don't interfere with selector matching.
+    for tag in _STRIP_TAGS:
+        cleaned = re.sub(
+            rf"<{tag}\b[^>]*>.*?</{tag}>",
+            "",
+            cleaned,
+            flags=re.DOTALL | re.IGNORECASE,
+        )
+        cleaned = re.sub(
+            rf"<{tag}\b[^>]*/?>",
+            "",
+            cleaned,
+            flags=re.IGNORECASE,
+        )
+    # Try each main-content selector
+    candidates = []
+    for sel in _MAIN_SELECTORS:
+        for m in sel.finditer(cleaned):
+            candidates.append((m.start(), m.end()))
+    if candidates:
+        candidates.sort(key=lambda c: (c[0], -(c[1] - c[0])))
+        start, end = candidates[0]
+        # Walk back to the opening '<' of the tag this selector matched.
+        # role=/id=/class= selectors may land inside the tag, not on the '<'.
+        lt = cleaned.rfind("<", 0, start + 1)
+        if lt >= 0 and lt > start - 300:  # sanity: within a reasonable tag length
+            start = lt
+        block = cleaned[start:end]
+        # If we matched an opener but not its close, expand to the next </article|main>
+        if not re.search(r"</(article|main)\s*>", block, re.IGNORECASE):
+            closer = re.search(r"</(article|main)\s*>", cleaned[start:], re.IGNORECASE)
+            if closer:
+                block = cleaned[start:start + closer.end()]
+        return block
+    return cleaned
+
+
+def _remove_class_blocks(html):
+    """Strip div/section/ul that look like ads, share widgets, related, comments."""
+    opener_re = re.compile(
+        r"<(div|section|aside|ul|ol)\b[^>]*class\s*=\s*[\"']([^\"']+)[\"'][^>]*>",
+        re.IGNORECASE,
+    )
+    out_chunks = []
+    i = 0
+    while i < len(html):
+        m = opener_re.search(html, i)
+        if not m:
+            out_chunks.append(html[i:])
+            break
+        out_chunks.append(html[i:m.start()])
+        classes = m.group(2)
+        if _AD_CLASS.search(classes) or _SKIP_CLASS.search(classes):
+            tag_name = m.group(1).lower()
+            close_re = re.compile(rf"</{tag_name}\s*>", re.IGNORECASE)
+            cm = close_re.search(html, m.end())
+            if cm:
+                i = cm.end()
+            else:
+                i = m.end()
+        else:
+            out_chunks.append(m.group(0))
+            i = m.end()
+    return "".join(out_chunks)
+
+
+def extract_main_content(html, max_chars=5000):
+    """Extract clean main-article text from raw HTML. Up to max_chars."""
+    if not html:
+        return ""
+    block = _extract_main_html(html)
+    block = _remove_class_blocks(block)
+    text = html_to_text(block)
+    # Collapse 3+ blank lines to 2
+    text = re.sub(r"\n{3,}", "\n\n", text)
+    # Drop lines that are just punctuation / single chars
+    text = "\n".join(
+        ln.strip() for ln in text.split("\n")
+        if ln.strip() and len(ln.strip()) > 1
+    )
+    return text.strip()[:max_chars]
+
+
+def clean_paragraph(text, max_chars=600):
+    """Clean a paragraph: drop URLs, social handles, 'read also' references."""
+    if not text:
+        return ""
+    t = text
+    # Drop URLs (http/https bare)
+    t = re.sub(r"https?://\S+", "", t)
+    # Drop @handles
+    t = re.sub(r"@[A-Za-z0-9_]{2,30}", "", t)
+    # Drop "Lee también:" / "Sigue leyendo:" lead-ins
+    t = re.sub(
+        r"(?i)\b(?:lee\s+tambi[eé]n|sigue\s+leyendo|te\s+puede\s+interesar|"
+        r"relacionad[oa]s?:?)\s*[:\-–—]\s*",
+        "", t,
+    )
+    # Drop parenthetical "Foto: ..." / "Imagen: ..." credits
+    t = re.sub(r"(?i)\((?:foto|imagen|v[ií]deo|video|fuente|cr[eé]dito)\s*:[^)]*\)", "", t)
+    # Collapse whitespace
+    t = re.sub(r"\s+", " ", t).strip()
+    t = t.strip(" ,;:-–—")
+    if len(t) > max_chars:
+        cut = t[:max_chars]
+        last = max(cut.rfind(". "), cut.rfind("; "), cut.rfind(", "))
+        if last > max_chars * 0.6:
+            cut = cut[:last + 1]
+        else:
+            cut = cut.rstrip(" ,;:-–—") + "…"
+        t = cut
+    # If the result starts mid-sentence (no uppercase, no terminal punct before
+    # max_chars), drop leading lowercase junk so it reads naturally when
+    # pasted after the lead.
+    if t and t[0].islower():
+        # Find the first sentence boundary and start from there
+        m = re.search(r"[.!?]\s+[A-ZÁÉÍÓÚÑ]", t[:max_chars])
+        if m:
+            t = t[m.end() - 1:].lstrip()
+            if t and t[0].isupper():
+                t = t[0].lower() + t[1:]
+    return t
+
+
+def extract_key_facts(text, max_facts=8):
+    """Pull key facts (numbers, dates, percentages, quotes) from text."""
+    facts = []
+    if not text:
+        return facts
+    sentences = re.split(r"(?<=[.!?])\s+", text)
+    for s in sentences:
+        s = s.strip()
+        if len(s) < 20 or len(s) > 240:
+            continue
+        if re.search(r"\d", s):
+            facts.append(s)
+            if len(facts) >= max_facts:
                 break
-        return results
-    except Exception as e:
-        print(f"      ! search error: {e}", file=sys.stderr)
-        return []
+    quote_re = re.compile(r"[\"'\u201c\u201d\u00ab\u00bb]([^\"'\u201c\u201d\u00ab\u00bb\n]{20,200})[\"'\u201c\u201d\u00ab\u00bb]")
+    for q in quote_re.findall(text):
+        facts.append("\u00ab" + q + "\u00bb")
+        if len(facts) >= max_facts + 4:
+            break
+    return facts[:max_facts]
 
 
+def extract_best_quote(text, max_len=240):
+    """Return the most impactful quoted sentence or numeric sentence."""
+    if not text:
+        return ""
+    quote_re = re.compile(r"[\"'\u201c\u201d\u00ab\u00bb]([^\"'\u201c\u201d\u00ab\u00bb\n]{30,240})[\"'\u201c\u201d\u00ab\u00bb]")
+    m = quote_re.search(text)
+    if m:
+        q = m.group(1).strip()
+        return q[:max_len]
+    sentences = re.split(r"(?<=[.!?])\s+", text)
+    for s in sentences:
+        s = s.strip()
+        if re.search(r"\d", s) and 40 <= len(s) <= max_len:
+            return s
+    return ""
+
+
+def multi_source_extract(results, limit=3):
+    """Fetch up to `limit` search results and return primary + secondary sources
+    plus a flat list of cross-source facts.
+
+    Returns:
+        {"primary": {...} | None,
+         "secondary": [{...}, ...],
+         "all_facts": [str, ...]}
+    """
+    out = {"primary": None, "secondary": [], "all_facts": []}
+    if not results:
+        return out
+    skip_domains = (
+        "youtube.com", "facebook.com", "instagram.com",
+        "twitter.com", "x.com", "tiktok.com", "reddit.com",
+        "pinterest.com", "linkedin.com", "wa.me", "t.me",
+    )
+    cleaned = []
+    for r in results:
+        url = r.get("url", "")
+        if not url:
+            continue
+        if any(d in url for d in skip_domains):
+            continue
+        cleaned.append(r)
+        if len(cleaned) >= limit:
+            break
+    if not cleaned:
+        cleaned = results[:limit]
+
+    sources = []
+    for r in cleaned:
+        url = r.get("url", "")
+        text = extract_article(url)
+        if text and len(text) > 250:
+            sources.append({
+                "title": r.get("title", ""),
+                "url": url,
+                "domain": url.split("/")[2] if "/" in url else "fuente",
+                "text": text,
+                "paragraphs": [p.strip() for p in text.split("\n\n") if len(p.strip()) > 80],
+                "facts": extract_key_facts(text, max_facts=6),
+            })
+    if not sources:
+        return out
+    # Pick the longest/cleanest as primary
+    sources.sort(key=lambda s: len(s["text"]), reverse=True)
+    out["primary"] = sources[0]
+    out["secondary"] = sources[1:]
+    for s in sources:
+        out["all_facts"].extend(s["facts"])
+    return out
+
+
+def _format_editorial_timestamp():
+    """Return a fixed-format CST timestamp string."""
+    return datetime.now().strftime("%H:%M CST, %d/%m/%Y")
+
+
+WHY_IT_MATTERS = {
+    "default": "El caso agrega contexto nuevo a la conversación pública y obliga a replantear la lectura del corto plazo: redefine prioridades en la agenda, acelera una decisión pendiente o pone presión sobre actores que hasta ahora habían quedado al margen.",
+    "Política": "La decisión redefine el equilibrio de fuerzas en el corto plazo y obliga a los actores clave a fijar postura antes de la próxima votación o decreto; el costo político se traslada a quienes no se suban al nuevo eje.",
+    "Economía": "El movimiento recalibra expectativas de inflación, tasas y tipo de cambio; los sectores más sensibles al crédito y al consumo discrecional serán los primeros en reaccionar en la siguiente semana.",
+    "Seguridad": "La estrategia se reencuadra a nivel federal y estatal: lo que se mide en las próximas semanas es si los operativos coordinados se traducen en cifras del SESNSP y no sólo en declaraciones.",
+    "Fútbol": "El resultado cambia el favoritismo rumbo a la siguiente jornada o competición; lo que se observa ahora es el estado físico de los protagonistas, las rotaciones del DT y el impacto en la tabla.",
+    "Deportes": "La actuación redefine el ranking y la clasificación de la disciplina; la atención pasa a las próximas pruebas, rivales directos y la condición física de los protagonistas.",
+    "Tecnología": "Developers y empresas ganan (o pierden) una capacidad concreta en su stack; la presión ahora se mueve a documentación oficial, pricing y comunidad de terceros.",
+    "Espectáculos": "La noticia marca agenda cultural y mueve la conversación en redes; el impacto real se verá en preventas, nominaciones y la recepción del público en las próximas semanas.",
+    "Sucesos": "El saldo humano y material obliga a revisar protocolos de protección civil y operativos de emergencia; lo que sigue es el parte oficial y la cobertura de los servicios involucrados.",
+    "Mundo": "El episodio reconfigura la agenda internacional, los mercados y la opinión pública global; el foco se traslada a la reacción de potencias, organismos multilaterales y medios aliados.",
+    "Cultura": "La pieza enriquece (o cuestiona) el canon y abre una conversación en la escena cultural; la lectura especializada y la recepción del público marcarán su huella en la temporada.",
+    "Ciencia": "La evidencia puede modificar protocolos, tratamientos o modelos teóricos; lo decisivo ahora es la revisión por pares, las réplicas y las aplicaciones prácticas en el corto plazo.",
+    "Salud": "El hallazgo puede modificar guías clínicas, campañas de prevención o acceso a servicios; el peso lo tendrán el posicionamiento de la OMS, la SSA, el IMSS y la industria farmacéutica.",
+    "Internacional": "Mueve el tablero diplomático, comercial y de seguridad a escala regional; la atención pasa a las reacciones de aliados, sanciones, cumbres o nuevas rondas de negociación.",
+    "Geopolítica": "Altera el equilibrio de poder entre bloques y la lectura estratégica del conflicto; el impacto se mide en cadenas de suministro, energía, migraciones y opinión pública global.",
+    "Bienestar": "La práctica gana (o pierde) respaldo concreto para incorporarse a rutinas reales; lo que sigue es validación científica, constancia diaria y contraindicaciones específicas.",
+    "Vida Saludable": "Cambia (o confirma) lo que sabemos sobre nutrición, movimiento y descanso; el siguiente paso es revisar meta-análisis, opinión de especialistas y guías oficiales antes de aplicarlo.",
+    "Salud Mental": "Visibiliza un tema que sigue estigmatizado y abre rutas concretas de acompañamiento; urge escalar recursos profesionales y líneas de crisis, no sólo campañas de awareness.",
+    "Cripto": "Mueve liquidez, sentiment y narrativas del ciclo; las altcoins suelen amplificar el movimiento antes de que el mercado convencional reaccione. No es asesoría financiera: DYOR.",
+    "Mercados": "Sesgo sectorial, rotación entre value/growth y presión sobre activos refugio; el foco pasa a datos macro de la semana, earnings y comentarios de bancos centrales.",
+    "Finanzas Personales": "Cambia una decisión concreta que toca bolsillo, crédito o ahorro; vale la pena comparar comisiones, leer letra chica y revisar el colchón de emergencia antes de moverse.",
+    "Sustentabilidad": "Acelera (o retrasa) la transición hacia prácticas ESG y energía limpia; el peso real lo tendrán regulación, financiamiento verde y presión de consumidores e inversionistas.",
+    "Hogar": "Una idea concreta para mejorar confort, funcionalidad o estética del hogar; el truco está en empezar por una habitación y no pretender resolver todo a la vez.",
+    "Familia": "Aplica a la dinámica diaria de crianza, comunicación y educación en casa; cada familia es única y la recomendación gana cuando se adapta al contexto propio.",
+    "Viajes": "Cambia (o confirma) el mejor momento, ruta o presupuesto para el próximo viaje; reservar con seis a ocho semanas de anticipación suele dar mejor tarifa aérea.",
+    "Gastronomía": "Una receta, tendencia o técnica replicable en casa esta semana; marinar con antelación y dejar reposar 30+ minutos intensifica los sabores.",
+    "IA": "Developers, empresas y usuarios ganan (o pierden) una capacidad clave en su flujo; la lectura inmediata pasa por benchmarks independientes, casos de uso reales y comentarios de la comunidad.",
+}
+
+
+def build_journalistic_body(primary, secondary_facts, category, source_url, source_domain):
+    """Build the long-form journalistic body. Returns 1500-2500 chars target.
+
+    Layout:
+      Lead (2 sentences) -> Qué pasó -> Contexto -> Cifra / cita ->
+      Por qué importa -> Fuente footer.
+    """
+    if not primary:
+        return ""
+    paragraphs = primary.get("paragraphs") or []
+    # Lead: first 1-2 paragraphs compressed into 2 sentences
+    lead_src = clean_paragraph(paragraphs[0] if paragraphs else primary["text"], 600)
+    sentences = re.split(r"(?<=[.!?])\s+", lead_src)
+    if len(sentences) >= 2:
+        lead = " ".join(sentences[:2]).strip()
+    else:
+        lead = lead_src.rstrip(".") + "."
+
+    # Qué pasó: 800-1400 chars of clean prose from primary body.
+    # Skip the lead paragraph AND aggressively dedupe against the lead text.
+    lead_text_clean = clean_paragraph(paragraphs[0] if paragraphs else "", 600)
+    lead_norm = re.sub(r"\s+", " ", lead_text_clean).strip().lower()[:300]
+    body_chunks = []
+    used_prefixes = {lead_norm} if lead_norm else set()
+    for p in paragraphs[1:6]:
+        cleaned = clean_paragraph(p, 600)
+        if not cleaned:
+            continue
+        # Skip if the start of this paragraph overlaps with the lead or
+        # with a paragraph we already included.
+        cleaned_norm = re.sub(r"\s+", " ", cleaned).strip().lower()[:120]
+        if cleaned_norm in used_prefixes:
+            continue
+        # Also skip if this paragraph is essentially the lead rephrased.
+        if lead_norm and (cleaned_norm[:80] in lead_norm or lead_norm[:80] in cleaned_norm):
+            continue
+        used_prefixes.add(cleaned_norm)
+        body_chunks.append(cleaned)
+        joined = "\n\n".join(body_chunks)
+        if 800 <= len(joined) and len(body_chunks) >= 2:
+            break
+        if len(joined) > 1400:
+            break
+    if not body_chunks or sum(len(c) for c in body_chunks) < 600:
+        # Fall back to slicing the cleaned text directly (skip first ~500 chars
+        # that the lead already used).
+        body_chunks = [clean_paragraph(primary["text"][500:], 1400)]
+    que_paso = "\n\n".join(body_chunks)
+
+    # Contexto: 2-3 sentences from a paragraph NOT already shown in "Qué pasó"
+    # plus a cross-source fact if available.
+    contexto = ""
+    candidates = paragraphs[2:6]  # skip lead (0) and first body para (1)
+    for p in reversed(candidates):
+        cleaned = clean_paragraph(p, 400)
+        if not cleaned:
+            continue
+        cleaned_norm = re.sub(r"\s+", " ", cleaned).strip().lower()[:120]
+        if any(cleaned_norm[:80] in re.sub(r"\s+", " ", c).strip().lower() for c in body_chunks):
+            continue
+        if lead_norm and cleaned_norm[:80] in lead_norm:
+            continue
+        contexto = cleaned
+        break
+    if not contexto and candidates:
+        contexto = clean_paragraph(candidates[0], 400)
+    if secondary_facts and contexto:
+        for fact in secondary_facts:
+            f_clean = clean_paragraph(fact, 240)
+            if f_clean and f_clean[:40] not in contexto:
+                contexto = contexto.rstrip(". ") + ". " + f_clean
+                break
+    if not contexto:
+        contexto = clean_paragraph(primary["text"][1000:], 400)
+    csent = re.split(r"(?<=[.!?])\s+", contexto.strip())
+    if len(csent) >= 3:
+        contexto = " ".join(csent[:3]).strip()
+    elif len(csent) == 1:
+        contexto = contexto.rstrip(".") + "."
+    else:
+        contexto = contexto.rstrip(".")
+
+    # Cifra / cita: best quote or numeric fact (wrap quotes in «» for clarity)
+    cifra = extract_best_quote(primary["text"], max_len=280)
+    if cifra:
+        if not (cifra.startswith("«") or cifra.startswith('"')
+                or cifra.startswith("“")):
+            cifra = "«" + cifra + "»"
+    if not cifra and secondary_facts:
+        for f in secondary_facts:
+            if re.search(r"\d", f):
+                cifra = clean_paragraph(f, 260)
+                break
+    if cifra and not cifra.endswith("."):
+        cifra = cifra.rstrip() + "."
+
+    por_que = WHY_IT_MATTERS.get(category, WHY_IT_MATTERS["default"])
+
+    parts = [
+        lead,
+        "📍 **Qué pasó**\n\n" + que_paso,
+        "🔍 **El contexto**\n\n" + contexto,
+    ]
+    if cifra:
+        parts.append("💬 **La cifra / la cita**\n\n" + cifra)
+    parts.append("🎯 **Por qué importa**\n\n" + por_que)
+    parts.append(
+        "---\n\n"
+        f"📰 Fuente: [{source_domain}]({source_url})\n"
+        "🤖 Publicado automáticamente por el digest editorial de Aguitech Core.\n"
+        f"🕐 Hora de cierre editorial: {_format_editorial_timestamp()}"
+    )
+    body = "\n\n".join(parts)
+    if len(body) > 2800:
+        body = body[:2770].rsplit("\n", 1)[0] + "…"
+    return body
+
+
+# ======== SEARCH (DuckDuckGo HTML — no API key needed) ========
+# Direct RSS feeds — these return real article URLs (not Google News redirects).
+# Mapped roughly to categories so search() can pick the right feeds.
+DIRECT_FEEDS = {
+    "general": [
+        "https://www.elfinanciero.com.mx/rss",
+        "https://www.reforma.com/rss/portada.xml",
+    ],
+    "deportes": [
+        "https://www.marca.com/rss/futbol/mexico.xml",
+        "https://www.record.com.mx/rss",
+    ],
+    "mundo": [
+        "https://www.bbc.com/mundo/index.xml",
+    ],
+    "tecnologia": [
+        "https://www.xataka.com/index.xml",
+        "https://www.genbeta.com/index.xml",
+        "https://www.unocero.com/feed/",
+        "https://es.wired.com/feed/rss",
+    ],
+    "espectaculos": [
+        "https://www.elmundotoday.com/feed/",  # satirical; works as placeholder
+    ],
+}
+
+# Map a category name → DIRECT_FEEDS key.
+_CATEGORY_TO_FEEDS = {
+    "Política": "general",
+    "Economía": "general",
+    "Seguridad": "general",
+    "Sucesos": "general",
+    "Internacional": "mundo",
+    "Geopolítica": "mundo",
+    "Mundo": "mundo",
+    "Fútbol": "deportes",
+    "Deportes": "deportes",
+    "Tecnología": "tecnologia",
+    "IA": "tecnologia",
+    "Ciencia": "tecnologia",
+    "Espectáculos": "espectaculos",
+    "Cultura": "espectaculos",
+}
+
+
+def _fetch_feed(url, max_items=30):
+    """Fetch a single RSS feed and return list of {title, url, snippet}."""
+    try:
+        req = urllib.request.Request(url, headers={
+            "User-Agent": "Mozilla/5.0 (X11; Linux) Firefox/115",
+        })
+        with urllib.request.urlopen(req, timeout=12) as r:
+            xml = r.read().decode("utf-8", "replace")
+    except Exception:
         return []
+    out = []
+    for item_match in re.finditer(r"<item>([\s\S]*?)</item>", xml):
+        item_xml = item_match.group(1)
+        t = re.search(r"<title>(?:<!\[CDATA\[)?(.+?)(?:\]\]>)?</title>", item_xml)
+        l = re.search(r"<link>(?:<!\[CDATA\[)?(.+?)(?:\]\]>)?</link>", item_xml)
+        d = re.search(r"<description>(?:<!\[CDATA\[)?([\s\S]*?)(?:\]\]>)?</description>",
+                      item_xml, re.DOTALL)
+        if not t or not l:
+            continue
+        title = re.sub(r"<[^>]+>", "", t.group(1)).strip()
+        link = l.group(1).strip()
+        desc = ""
+        if d:
+            desc = re.sub(r"<[^>]+>", "", d.group(1)).strip()
+            desc = re.sub(r"\s+", " ", desc)[:300]
+        out.append({"title": title, "url": link, "snippet": desc})
+        if len(out) >= max_items:
+            break
+    return out
+
+
+def _score(item, keywords):
+    """Score a feed item against a list of query keywords (case-insensitive).
+    Returns 0 if no keyword match."""
+    hay = " ".join([item.get("title", ""), item.get("snippet", "")]).lower()
+    score = 0
+    for kw in keywords:
+        kw_l = kw.lower()
+        if kw_l in hay:
+            score += 1
+            # Bonus: keyword in title
+            if kw_l in item.get("title", "").lower():
+                score += 2
+    return score
+
+
+def search(query, limit=5, category=None):
+    """Search for `query` and return up to `limit` results with direct URLs.
+
+    Strategy:
+    1. Try category-specific direct RSS feeds first, filtered by keyword.
+    2. Fall back to general direct feeds filtered by keyword.
+    3. Last resort: Google News RSS (results kept only if URL is NOT a Google
+       redirect, since those are empty shell pages).
+    """
+    keywords = [w for w in re.split(r"\s+", query.strip()) if len(w) > 3]
+    out = []
+    seen_urls = set()
+
+    # Phase 1: category-specific feeds
+    feed_keys = []
+    if category and category in _CATEGORY_TO_FEEDS:
+        feed_keys.append(_CATEGORY_TO_FEEDS[category])
+    feed_keys.append("general")
+    seen_keys = set()
+
+    for fk in feed_keys:
+        if fk in seen_keys:
+            continue
+        seen_keys.add(fk)
+        for feed_url in DIRECT_FEEDS.get(fk, []):
+            items = _fetch_feed(feed_url)
+            # Score and sort
+            scored = [(it, _score(it, keywords)) for it in items]
+            scored.sort(key=lambda x: -x[1])
+            for it, sc in scored:
+                if sc == 0:
+                    continue
+                if it["url"] in seen_urls:
+                    continue
+                # Skip social/paywall domains
+                if any(d in it["url"] for d in (
+                    "news.google.com", "youtube.com", "facebook.com",
+                    "instagram.com", "twitter.com", "x.com", "tiktok.com",
+                    "reddit.com", "pinterest.com", "linkedin.com", "wa.me", "t.me",
+                )):
+                    continue
+                seen_urls.add(it["url"])
+                out.append(it)
+                if len(out) >= limit:
+                    return out
+
+    # Phase 2: DuckDuckGo HTML fallback — returns real article URLs (via DDG redirect).
+    # Skipped if we already have enough results from phase 1.
+    if len(out) < limit:
+        try:
+            url = "https://html.duckduckgo.com/html/?" + urllib.parse.urlencode({
+                "q": query,
+                "kl": "mx-es",
+            })
+            req = urllib.request.Request(url, headers={
+                "User-Agent": "Mozilla/5.0 (X11; Linux) Firefox/115",
+            })
+            with urllib.request.urlopen(req, timeout=15) as r:
+                html = r.read().decode("utf-8", "replace")
+            # DDG result links: class="result__a" href="..."  OR uddg= encoded URL
+            for m in re.finditer(
+                r'class="result__a"[^>]*href="([^"]+)"[^>]*>([\s\S]*?)</a>',
+                html, re.IGNORECASE,
+            ):
+                href = m.group(1)
+                title_html = m.group(2)
+                # Resolve DDG redirect wrapper to the real URL
+                if "uddg=" in href:
+                    real = urllib.parse.unquote(
+                        re.search(r"uddg=([^&]+)", href).group(1)
+                        if "uddg=" in href else href
+                    )
+                else:
+                    real = href
+                # Skip social/paywall/news.google
+                if any(d in real for d in (
+                    "news.google.com", "youtube.com", "facebook.com",
+                    "instagram.com", "twitter.com", "x.com", "tiktok.com",
+                    "reddit.com", "pinterest.com", "linkedin.com", "wa.me", "t.me",
+                    "duckduckgo.com",
+                )):
+                    continue
+                title = re.sub(r"<[^>]+>", "", title_html).strip()
+                desc_m = re.search(
+                    r'class="result__snippet"[^>]*>([\s\S]*?)</[^>]+>',
+                    html[m.end():m.end() + 4000], re.IGNORECASE,
+                )
+                desc = ""
+                if desc_m:
+                    desc = re.sub(r"<[^>]+>", "", desc_m.group(1)).strip()
+                    desc = re.sub(r"\s+", " ", desc)[:300]
+                if real in seen_urls:
+                    continue
+                seen_urls.add(real)
+                out.append({"title": title, "url": real, "snippet": desc})
+                if len(out) >= limit:
+                    return out
+        except Exception as e:
+            print(f"      ! ddg fallback error: {e}", file=sys.stderr)
+
+    return out
 
 
 def extract_article(url):
-    """Fetch a URL and extract clean text content. Best-effort."""
+    """Fetch a URL and extract clean main-article text. Returns up to 5000 chars
+    of body content (vs the old 2500-char full-page dump)."""
     try:
         req = urllib.request.Request(url, headers={
             "User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36",
@@ -616,11 +1183,11 @@ def extract_article(url):
             if "html" not in ct:
                 return None
             html = r.read().decode("utf-8", "replace")
-        text = html_to_text(html)
+        # Use the smart main-content extractor (strips nav/ads/share/comments)
+        text = extract_main_content(html, max_chars=5000)
         if len(text) < 200:
             return None
-        # Cut to a reasonable excerpt (first 1500 chars)
-        return text[:2500]
+        return text
     except Exception as e:
         return None
 
@@ -671,26 +1238,18 @@ def build_post(c, category, query, force_gallery=False, force_video=False, activ
     Editorial approach: adapts tone per category, adds journalistic structure
     (lead, context, quote, why-it-matters), includes source attribution.
     """
-    results = search(query, limit=5)
+    results = search(query, limit=5, category=category)
     if not results:
         return None
 
-    # Pick best non-social-media result with extractable content
-    best = None
-    article_text = None
-    for r in results:
-        if any(skip in r["url"] for skip in (
-            "youtube.com", "facebook.com", "instagram.com",
-            "twitter.com", "x.com", "tiktok.com", "reddit.com",
-            "pinterest.com", "linkedin.com"
-        )):
-            continue
-        text = extract_article(r["url"])
-        if text and len(text) > 300:
-            best = r
-            article_text = text
-            break
-    if not best or not article_text:
+    # Multi-source enrichment: fetch 2-3 candidates, pick the longest/cleanest
+    # as primary, keep the rest for cross-source fact-checking.
+    bundle = multi_source_extract(results, limit=3)
+    primary = bundle["primary"]
+    if primary:
+        best = {"title": primary["title"], "url": primary["url"]}
+        article_text = primary["text"]
+    else:
         best = results[0]
         article_text = best.get("snippet", "")
 
@@ -736,12 +1295,13 @@ def build_post(c, category, query, force_gallery=False, force_video=False, activ
     source_url = best["url"]
     source_domain = source_url.split("/")[2] if "/" in source_url else "fuente"
 
-    # Extract first 3-4 paragraphs as "body core"
-    paragraphs = [p.strip() for p in article_text.split("\n\n") if len(p.strip()) > 60]
+    # Extract first 3-4 paragraphs as "body core" (keep vars for summary build)
+    paragraphs = ([p.strip() for p in article_text.split("\n\n") if len(p.strip()) > 60]
+                  if article_text else [])
     if not paragraphs:
-        paragraphs = [article_text[:800]]
+        paragraphs = [article_text[:800]] if article_text else [""]
 
-    lead_para = paragraphs[0][:500]
+    lead_para = paragraphs[0][:500] if paragraphs else ""
     context_para = paragraphs[1][:400] if len(paragraphs) > 1 else ""
     detail_para = paragraphs[2][:400] if len(paragraphs) > 2 else ""
 
@@ -905,168 +1465,29 @@ def build_post(c, category, query, force_gallery=False, force_video=False, activ
         excerpt = excerpt[:227].rstrip() + "..."
     excerpt = lead + excerpt
 
-    # Editorial framing by category
-    if category == "Fútbol":
-        framing = (
-            "\n\n📊 *Lo que necesitas saber:*\n"
-            f"- **Qué pasó:** {lead_para[:200]}\n"
-            "- **Por qué importa: ** estas decisiones marcan el rumbo del equipo rumbo al Apertura 2026.\n"
-            "- **Qué sigue: ** atención a los próximos entrenamientos y posibles refuerzos."
-        )
-    elif category == "Política":
-        framing = (
-            "\n\n📊 *En contexto:*\n"
-            f"- **Hecho: ** {lead_para[:200]}\n"
-            "- **Reacción oficial: ** la medida forma parte de la estrategia del Gabinete de Seguridad y la Sener.\n"
-            "- **Lo que sigue: ** próximos decretos y reacciones del sector privado."
-        )
-    elif category == "Economía":
-        framing = (
-            "\n\n📊 *Números del día:*\n"
-            f"- **Hecho: ** {lead_para[:200]}\n"
-            "- **Mercados: ** el peso se mantiene en banda de 17.40-17.60 frente al dólar.\n"
-            "- **Expectativa: ** Banxico publicará su próxima decisión de política monetaria esta semana."
-        )
-    elif category == "Tecnología":
-        framing = (
-            "\n\n📊 *Lo que cambia:*\n"
-            f"- **Anuncio: ** {lead_para[:200]}\n"
-            "- **Impacto: ** developers y empresas podrán integrar estas herramientas en sus flujos.\n"
-            "- **Por qué importa: ** la carrera por el liderazgo en IA sigue acelerándose."
-        )
-    elif category == "Seguridad":
-        framing = (
-            "\n\n📊 *Cifras oficiales:*\n"
-            f"- **Hecho: ** {lead_para[:200]}\n"
-            "- **Tendencia: ** reducción sostenida de delitos de alto impacto según datos del SESNSP.\n"
-            "- **Cobertura: ** 32 entidades federativas con coordinación operativa."
-        )
-    elif category == "Espectáculos":
-        framing = (
-            "\n\n🎤 *Cartelera destacada:*\n"
-            f"- **Evento: ** {lead_para[:200]}\n"
-            "- **Boletos: ** disponibles en Ticketmaster y taquillas del recinto.\n"
-            "- **Recomendación: ** llegar temprano para evitar filas."
-        )
-    elif category == "Internacional":
-        framing = (
-            "\n\n🌐 *Lo que hay que entender:*\n"
-            f"- **Hecho: ** {lead_para[:200]}\n"
-            "- **Lectura geopolítica: ** movimientos de poder en un mundo multipolar, implicaciones para la región.\n"
-            "- **Lo que sigue: ** reacciones de aliados, sanciones, cumbres o nuevas negociaciones."
-        )
-    elif category == "Geopolítica":
-        framing = (
-            "\n\n🗺️ *Lectura estratégica:*\n"
-            f"- **Conflicto: ** {lead_para[:200]}\n"
-            "- **Mapa de actores: ** potencias, bloques regionales, Organismos Multilaterales y su posicionamiento.\n"
-            "- **Implicaciones: ** impacto en cadenas de suministro, energía, migraciones y opinión pública global."
-        )
-    elif category == "Bienestar":
-        framing = (
-            "\n\n🧘 *Claves prácticas:*\n"
-            f"- **Práctica: ** {lead_para[:200]}\n"
-            "- **Beneficio: ** mejora en niveles de estrés, sueño, energía y claridad mental según estudios recientes.\n"
-            "- **Cómo empezar: ** sesiones cortas de 5-10 minutos al día, constancia más que duración."
-        )
-    elif category == "Vida Saludable":
-        framing = (
-            "\n\n🥗 *Lo que la ciencia dice:*\n"
-            f"- **Hallazgo: ** {lead_para[:200]}\n"
-            "- **Aplicación práctica: ** sustituciones simples en la dieta, rutinas cortas de movimiento, manejo del sueño.\n"
-            "- **Advertencia: ** consulte a un profesional de salud antes de cambiar hábitos radicalmente."
-        )
-    elif category == "Salud Mental":
-        framing = (
-            "\n\n🧠 *Lo que hay que saber:*\n"
-            f"- **Tema: ** {lead_para[:200]}\n"
-            "- **Señales: ** los especialistas recomiendan buscar ayuda profesional si los síntomas persisten más de 2 semanas.\n"
-            "- **Recursos: ** líneas de crisis 24/7 disponibles en México: 55-5259-8121 (SAPTEL), 800-290-0024 (Confía)."
-        )
-    elif category == "Cripto":
-        framing = (
-            "\n\n₿ *Movimiento del mercado:*\n"
-            f"- **Movimiento: ** {lead_para[:200]}\n"
-            "- **Análisis: ** soporte y resistencia clave, correlación con mercados tradicionales y apetito de riesgo global.\n"
-            "- **Advertencia: ** alta volatilidad, DYOR (haz tu propia investigación) antes de invertir, no es asesoría financiera."
-        )
-    elif category == "Mercados":
-        framing = (
-            "\n\n📈 *Movimientos clave:*\n"
-            f"- **Apertura: ** {lead_para[:200]}\n"
-            "- **Sectores: ** rotación entre tecnológicas, energía, financieras y consumo discrecional.\n"
-            "- **Volatilidad: ** el VIX se mantiene en rango, atención a datos macro de la semana."
-        )
-    elif category == "Finanzas Personales":
-        framing = (
-            "\n\n💳 *Tips accionables:*\n"
-            f"- **Tema: ** {lead_para[:200]}\n"
-            "- **Aplicación: ** automatizar ahorros, revisar gastos hormiga, comparar comisiones y tasas.\n"
-            "- **Regla de oro: ** fondo de emergencia de 3-6 meses de gastos antes de invertir en activos de riesgo."
-        )
-    elif category == "Sustentabilidad":
-        framing = (
-            "\n\n🌱 *Impacto real:*\n"
-            f"- **Iniciativa: ** {lead_para[:200]}\n"
-            "- **Alcance: ** comunidades, empresas y gobiernos involucrados; métricas de impacto ESG.\n"
-            "- **Tendencia: ** creciente presión regulatoria y de consumidores por prácticas sustentables."
-        )
-    elif category == "Hogar":
-        framing = (
-            "\n\n🏡 *Para tu casa:*\n"
-            f"- **Idea: ** {lead_para[:200]}\n"
-            "- **Inversión: ** opciones para todos los presupuestos, desde DIY hasta reformas integrales.\n"
-            "- **Tip: ** empezar por una habitación, no abrumarse con todo a la vez."
-        )
-    elif category == "Familia":
-        framing = (
-            "\n\n👨‍👩‍👧 *Para la familia:*\n"
-            f"- **Tema: ** {lead_para[:200]}\n"
-            "- **Aplicación: ** tiempo de calidad, comunicación asertiva, límites con tecnología, juego en familia.\n"
-            "- **Recordatorio: ** cada familia es única, adaptar las recomendaciones a tu contexto."
-        )
-    elif category == "Viajes":
-        framing = (
-            "\n\n✈️ *Para tu próxima aventura:*\n"
-            f"- **Destino: ** {lead_para[:200]}\n"
-            "- **Mejor temporada: ** clima, precios, multitudes según temporada alta/baja.\n"
-            "- **Tip: ** reservar con 6-8 semanas de anticipación suele dar mejor tarifa aérea."
-        )
-    elif category == "Gastronomía":
-        framing = (
-            "\n\n🍴 *Para la cocina:*\n"
-            f"- **Receta: ** {lead_para[:200]}\n"
-            "- **Ingredientes: ** opciones accesibles en supermercados mexicanos, sustituciones por temporada.\n"
-            "- **Tip: ** marinar con antelación intensifica sabores, deja reposar 30+ minutos."
-        )
-    elif category == "IA":
-        framing = (
-            "\n\n🤖 *Lo que cambia:*\n"
-            f"- **Anuncio: ** {lead_para[:200]}\n"
-            "- **Impacto: ** developers, empresas y usuarios podrán integrar estas capacidades en sus flujos de trabajo.\n"
-            "- **Por qué importa: ** la carrera por el liderazgo en IA sigue acelerándose con nuevos modelos cada semana."
-        )
-    else:
-        framing = (
-            "\n\n📊 *En resumen:*\n"
-            f"- **Hecho: ** {lead_para[:200]}\n"
-            "- **Contexto: ** fuentes oficiales y medios especializados amplían la cobertura.\n"
-            "- **Lectura recomendada: ** artículo completo en la fuente."
-        )
-
-    body_parts = [lead_para]
-    if context_para:
-        body_parts.append(context_para)
-    if detail_para:
-        body_parts.append(detail_para)
-    body_parts.append(framing)
-    body_parts.append(
-        f"\n---\n\n📰 *Fuente original:* [{source_domain}]({source_url})\n"
-        f"🤖 *Publicado automáticamente por el digest editorial de Aguitech Core.*\n"
-        f"🕐 *Hora de cierre editorial:* {datetime.now().strftime('%H:%M CST, %d/%m/%Y')}"
+    # ===== Journalistic body (NEW) =====
+    # Replace the per-category framing templates with a full journalistic
+    # structure (Lead → Qué pasó → Contexto → Cifra / cita → Por qué importa
+    # → Fuente). Pulls primary text + cross-source facts from multi_source_extract.
+    source_url = primary["url"] if primary else best.get("url", "")
+    source_domain = (source_url.split("/")[2] if "/" in source_url else "fuente")
+    body = build_journalistic_body(
+        primary=primary,
+        secondary_facts=bundle["all_facts"] if bundle else [],
+        category=category,
+        source_url=source_url,
+        source_domain=source_domain,
     )
+    if not body:
+        # Defensive fallback: at minimum, lead + source
+        body = (
+            f"{lead_para[:400]}\n\n"
+            f"---\n\n"
+            f"📰 Fuente: [{source_domain}]({source_url})\n"
+            "🤖 Publicado automáticamente por el digest editorial de Aguitech Core.\n"
+            f"🕐 Hora de cierre editorial: {_format_editorial_timestamp()}"
+        )
 
-    body = "\n\n".join(body_parts)
 
     # Tags — more specific, with date + slot stamp
     today = datetime.now().strftime("%Y-%m-%d")
