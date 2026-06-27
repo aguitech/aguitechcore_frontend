@@ -17,6 +17,7 @@ import postRoutes from './routes/post.routes.js';
 import notificationsRoutes from './routes/notifications.routes.js';
 import auditRoutes from './routes/audit.routes.js';
 import appointmentsRoutes from './routes/appointments.routes.js';
+import { getSitemap, getRobots } from './controllers/sitemap.controller.js';
 import { errorHandler } from './middleware/error.js';
 import { AuditLog } from './models/AuditLog.js';
 import { Notification } from './models/Notification.js';
@@ -33,6 +34,15 @@ app.use(express.json({ limit: '2mb' }));
 app.use('/api/uploads', express.static(path.resolve('uploads')));
 
 app.get('/api/health', (_req, res) => res.json({ ok: true, service: 'aguittech-core', ts: Date.now() }));
+
+// Sitemap.xml — public, generated on demand from published posts.
+// Mounted at the top level (no auth, no router prefix) so Google/Bing/etc.
+// can fetch /sitemap.xml without credentials. Crawlers will hit the
+// sitemap at the bare URL, so we serve both /sitemap.xml and /api/sitemap.xml.
+app.get('/sitemap.xml', getSitemap);
+app.get('/api/sitemap.xml', getSitemap);
+// robots.txt — also public; declares which paths crawlers should skip.
+app.get('/robots.txt', getRobots);
 
 app.use('/api/auth', authRoutes);
 app.use('/api/dashboard', dashboardRoutes);

@@ -88,17 +88,25 @@ class Client:
             else:
                 data = body
         req = urllib.request.Request(url, data=data, method=method, headers=h)
+        content_type = ""
         try:
             with urllib.request.urlopen(req, timeout=20) as r:
                 status = r.status
+                content_type = r.headers.get("Content-Type", "")
                 raw = r.read().decode("utf-8", errors="replace")
         except urllib.error.HTTPError as e:
             status = e.code
+            content_type = e.headers.get("Content-Type", "") if hasattr(e, "headers") else ""
             raw = e.read().decode("utf-8", errors="replace")
-        try:
-            parsed = json.loads(raw) if raw else None
-        except Exception:
+        # If the response is XML/HTML/text, return it as a raw string instead of
+        # trying to JSON-parse it. JSON endpoints keep their parsed-dict shape.
+        if "xml" in content_type or "html" in content_type or "text/" in content_type:
             parsed = raw
+        else:
+            try:
+                parsed = json.loads(raw) if raw else None
+            except Exception:
+                parsed = raw
         if expect is not None and status != expect:
             raise AssertionError(
                 f"{method} {path} → expected {expect}, got {status}\n      body: {str(parsed)[:300]}"
@@ -168,6 +176,73 @@ def test_public_blog(c):
     record("GET /api/blog/public/posts → 200", "items" in body, f"got keys: {list(body.keys()) if isinstance(body, dict) else type(body)}")
     n_posts = len(body.get("items", []))
     record(f"public list has {n_posts} posts (≥1)", n_posts >= 1, f"items={n_posts}")
+
+
+def test_sitemap(c):
+    section("3b. Sitemap.xml (public, no auth)")
+    # Hit the API directly first — the controller generates XML on the fly
+    # from the same {status:'publicado'} query the public listing uses.
+    # We use a custom request to capture Content-Type without forcing JSON parsing.
+    url = f"{c.base}/sitemap.xml"
+    try:
+        req = urllib.request.Request(url, headers={"Accept": "application/xml,text/xml,*/*"})
+        with urllib.request.urlopen(req, timeout=20) as r:
+            status = r.status
+            content_type = r.headers.get("Content-Type", "")
+            raw = r.read().decode("utf-8", errors="replace")
+    except Exception as e:
+        record("GET /sitemap.xml reachable", False, str(e))
+        return
+
+    record("GET /sitemap.xml → 200", status == 200, f"status={status}")
+    record("Content-Type is XML",
+           "xml" in content_type.lower(),
+           f"got Content-Type: {content_type!r}")
+
+    # Validate the document shape — should have a urlset root and at least
+    # the homepage + blog listing + every published post.
+    record("starts with XML declaration",
+           raw.lstrip().startswith('<?xml'),
+           f"first 80 chars: {raw[:80]!r}")
+    record("has <urlset> root with sitemap namespace",
+           'xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"' in raw,
+           "namespace declaration missing")
+    record("homepage listed",
+           "<loc>https://sxxysecret.com/</loc>" in raw,
+           "missing <loc> for homepage")
+    record("blog listing listed",
+           "<loc>https://sxxysecret.com/public/blog</loc>" in raw,
+           "missing <loc> for /public/blog")
+
+    # Each published post should appear. Count <url> entries minus the 3
+    # static ones (home + 2x /public/blog) and assert at least 1 dynamic post.
+    url_count = raw.count("<url>")
+    record(f"sitemap has {url_count} <url> entries (≥4)", url_count >= 4,
+           f"count={url_count}")
+
+    # Cross-reference: every slug from /api/blog/public/posts should appear
+    # in the sitemap. This is the strongest correctness check.
+    _, posts = c.get("/api/blog/public/posts", expect=200)
+    slugs = [p.get("slug") for p in posts.get("items", []) if p.get("slug")]
+    missing = [s for s in slugs if f"/public/blog/{s}" not in raw]
+    record(f"all {len(slugs)} published slugs present in sitemap",
+           len(missing) == 0,
+           f"missing: {missing[:3]}" if missing else f"all {len(slugs)} slugs OK")
+
+    # lastmod on a dynamic entry should be a valid ISO 8601 (UTC 'Z' suffix).
+    import re as _re
+    lastmod_match = _re.search(r"<lastmod>([^<]+)</lastmod>", raw)
+    if lastmod_match:
+        lm = lastmod_match.group(1)
+        record("first <lastmod> is ISO 8601 UTC",
+               lm.endswith("Z") and "T" in lm,
+               f"value: {lm!r}")
+    else:
+        record("at least one <lastmod> present", False, "no lastmod tag found")
+
+    # Also hit the /api/sitemap.xml alias to confirm both routes work.
+    status2, _ = c.get("/api/sitemap.xml", expect=200)
+    record("GET /api/sitemap.xml alias → 200", status2 == 200, f"status={status2}")
 
 
 def test_appointments_public(c, admin_user_id):
@@ -372,6 +447,7 @@ def main():
     c.last_admin_email = args.admin_email
     c.last_admin_password = args.admin_password
     test_public_blog(c)
+    test_sitemap(c)
     appt_id, starts, ends = test_appointments_public(c, admin_user_id)
     test_appointments_admin(c, appt_id)
     test_notifications(c, appt_id, member_id)
