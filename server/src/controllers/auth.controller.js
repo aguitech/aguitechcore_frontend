@@ -11,16 +11,50 @@ function signToken(user) {
   );
 }
 
+// Self-serve signup is always a 'member'. The role field is taken from the
+// query/body only when an ADMIN is creating a user via POST /api/users — not
+// here. This prevents a trivial privilege escalation:
+//   POST /api/auth/register { email, password, role: 'admin' } → 201 admin.
+// We log a warning when the body includes role, so we can spot anyone trying.
+const SELF_SERVE_ROLE = 'member';
+const ALLOWED_ADMIN_CREATE_ROLES = new Set(['admin', 'manager', 'member']);
+
 export async function register(req, res, next) {
   try {
     const errors = validationResult(req);
     if (!errors.isEmpty()) return res.status(400).json({ errors: errors.array() });
 
-    const { name, email, password, role } = req.body;
+    const { name, email, password } = req.body;
+
+    // Defense in depth: refuse any role-altering field from anonymous callers.
+    // Admin/manager role assignments MUST go through POST /api/users (which
+    // requires requireAuth + requireRole('admin') — see user.routes.js).
+    if (req.body && Object.prototype.hasOwnProperty.call(req.body, 'role')) {
+      audit({
+        req,
+        actor: { _id: 'anonymous', name: email, role: 'anonymous' },
+        action: 'auth.register_role_escalation_attempt',
+        category: 'auth',
+        targetType: 'User',
+        targetLabel: email,
+        meta: { attempted_role: String(req.body.role).slice(0, 40) },
+        severity: 'warning',
+      });
+      return res.status(400).json({
+        message: 'No puedes elegir tu propio rol al registrarte.',
+      });
+    }
+
     const exists = await User.findOne({ email });
     if (exists) return res.status(409).json({ message: 'Ese email ya está registrado' });
 
-    const user = await User.create({ name, email, password, role });
+    // Force role to 'member' — never trust client input for self-serve signup.
+    const user = await User.create({
+      name,
+      email,
+      password,
+      role: SELF_SERVE_ROLE,
+    });
     const token = signToken(user);
     audit({
       req,
@@ -37,6 +71,12 @@ export async function register(req, res, next) {
   } catch (err) {
     next(err);
   }
+}
+
+// Helper exported for the admin user-creation endpoint — admins may create
+// users with any of these roles; everything else gets rejected.
+export function isAllowedAdminRole(role) {
+  return ALLOWED_ADMIN_CREATE_ROLES.has(role);
 }
 
 export async function login(req, res, next) {

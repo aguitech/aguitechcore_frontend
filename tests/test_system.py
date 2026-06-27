@@ -170,6 +170,141 @@ def test_auth(c, admin_email, admin_pwd, member_email, member_pwd):
     return admin_user_id, admin_pwd, member_token, member_id
 
 
+def test_register_saas(c, admin_token):
+    """Self-serve signup: anyone can create a 'member' account via /api/auth/register.
+
+    Asserts:
+      - 201 + token + user with role='member'
+      - duplicate email → 409
+      - weak password (5 chars) → 400 from express-validator
+      - invalid email format → 400
+      - role elevation attempt (passing role:'admin') is ignored — server
+        defaults to 'member' for self-serve. (Server doesn't accept a role
+        field at all, but verify the response says 'member' regardless.)
+      - the new user can immediately log in (auto-login works)
+    """
+    section("2b. Self-serve register (SaaS signup)")
+    saved = c.token
+    c.token = None  # anonymous throughout
+
+    # Unique email per run (avoids 409 from a previous run)
+    suffix = int(time.time())
+    new_email = f"e2e+{suffix}@aguitech.test"
+    new_password = "secure1234"
+    new_name = "E2E Signup"
+
+    # 1. Happy path
+    status, body = c.post(
+        "/api/auth/register",
+        body={"name": new_name, "email": new_email, "password": new_password},
+        expect=201,
+    )
+    record("register new user → 201", status == 201, f"status={status}")
+    record(
+        "response has token + user",
+        bool(body.get("token")) and isinstance(body.get("user"), dict),
+        f"keys={list(body.keys()) if isinstance(body, dict) else type(body)}",
+    )
+    record(
+        "new user has role='member' (NOT admin)",
+        body.get("user", {}).get("role") == "member",
+        f"role={body.get('user', {}).get('role')!r}",
+    )
+    new_user_id = body.get("user", {}).get("_id")
+
+    # 2. Try to elevate by sending role='admin' — must be REJECTED with 400.
+    #    The server logs an audit event for the attempt and refuses to
+    #    create the user. Without this guard, any anonymous caller could
+    #    become admin in a single request.
+    evil_email = f"e2e+evil-{suffix}@aguitech.test"
+    try:
+        status2, body2 = c.post(
+            "/api/auth/register",
+            body={
+                "name": "Hacker",
+                "email": evil_email,
+                "password": new_password,
+                "role": "admin",  # attempted privilege escalation
+            },
+            expect=400,
+        )
+        record(
+            "role='admin' in body → 400 (escalation blocked)",
+            status2 == 400 and "rol" in (body2.get("message") or "").lower(),
+            f"status={status2} msg={body2.get('message') if isinstance(body2, dict) else body2}",
+        )
+    except AssertionError as e:
+        record("role='admin' in body → 400 (escalation blocked)", False, str(e))
+
+    # 3. Duplicate email → 409
+    try:
+        c.post(
+            "/api/auth/register",
+            body={"name": "Dupe", "email": new_email, "password": new_password},
+            expect=409,
+        )
+        record("duplicate email → 409", True)
+    except AssertionError as e:
+        record("duplicate email → 409", False, str(e))
+
+    # 4. Weak password → 400
+    try:
+        c.post(
+            "/api/auth/register",
+            body={
+                "name": "Weak",
+                "email": f"e2e+weak-{suffix}@aguitech.test",
+                "password": "abc",
+            },
+            expect=400,
+        )
+        record("weak password → 400", True)
+    except AssertionError as e:
+        record("weak password → 400", False, str(e))
+
+    # 5. Invalid email → 400
+    try:
+        c.post(
+            "/api/auth/register",
+            body={
+                "name": "Bademail",
+                "email": "not-an-email",
+                "password": new_password,
+            },
+            expect=400,
+        )
+        record("invalid email → 400", True)
+    except AssertionError as e:
+        record("invalid email → 400", False, str(e))
+
+    # 6. New user can log in immediately
+    status3, login_body = c.post(
+        "/api/auth/login",
+        body={"email": new_email, "password": new_password},
+        expect=200,
+    )
+    record(
+        "new user can log in",
+        bool(login_body.get("token")) and login_body.get("user", {}).get("_id") == new_user_id,
+        f"login_status={status3}",
+    )
+
+    # 7. /api/auth/me with the new token returns the right user
+    c.token = login_body["token"]
+    try:
+        status4, me_body = c.get("/api/auth/me", expect=200)
+        record(
+            "/api/auth/me with new token returns the right user",
+            me_body.get("user", {}).get("email") == new_email,
+            f"email={me_body.get('user', {}).get('email')!r}",
+        )
+    except AssertionError as e:
+        record("/api/auth/me with new token returns the right user", False, str(e))
+
+    # Restore admin token for the rest of the suite
+    c.token = saved
+
+
 def test_public_blog(c):
     section("3. Public blog")
     status, body = c.get("/api/blog/public/posts", expect=200)
@@ -544,6 +679,7 @@ def main():
     # Stash creds so cleanup can re-login if RBAC tests logged us out
     c.last_admin_email = args.admin_email
     c.last_admin_password = args.admin_password
+    test_register_saas(c, c.token)
     test_public_blog(c)
     test_sitemap(c)
     test_public_comments(c, args.admin_email, args.admin_password)

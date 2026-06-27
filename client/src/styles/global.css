@@ -1614,3 +1614,62 @@ pre.body {
   background: #fff7ed;
 }
 .empty.small.drop-target p { margin: 4px 0; }
+
+/* ----- Password strength meter (Register.jsx) ----- */
+
+.password-strength {
+  margin-top: 6px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.password-strength-bar {
+  flex: 1;
+  height: 4px;
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.password-strength-fill {
+  height: 100%;
+  transition: width 0.2s ease, background-color 0.2s ease;
+}
+
+.password-strength-fill.s0 { background: transparent; }
+.password-strength-fill.s1 { background: #dc2626; }   /* muy débil — red */
+.password-strength-fill.s2 { background: #ea580c; }   /* débil — orange */
+.password-strength-fill.s3 { background: #eab308; }   /* aceptable — yellow */
+.password-strength-fill.s4 { background: #65a30d; }   /* buena — lime */
+.password-strength-fill.s5 { background: #16a34a; }   /* fuerte — green */
+.password-strength-fill.s6 { background: #15803d; }   /* muy fuerte — dark green */
+
+/* Make the existing .card form layout breathe a bit more for the
+   register flow which has more fields than login. */
+.auth-wrap .card { padding: 2rem; }
+.auth-wrap .card label {
+  display: block;
+  margin-bottom: 1rem;
+}
+.auth-wrap .card label > input {
+  display: block;
+  width: 100%;
+  margin-top: 0.35rem;
+  padding: 0.55rem 0.75rem;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--bg, #0f172a);
+  color: inherit;
+  font: inherit;
+  font-size: 0.95rem;
+}
+.auth-wrap .card label > input:focus {
+  outline: none;
+  border-color: var(--accent, #FF6A00);
+  box-shadow: 0 0 0 3px rgba(255, 106, 0, 0.18);
+}
+.auth-wrap .card button[type="submit"] {
+  width: 100%;
+  margin-top: 0.5rem;
+}

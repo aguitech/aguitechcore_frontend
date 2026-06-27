@@ -39,6 +39,12 @@ export default function Login() {
         <button type="submit" disabled={loading}>{loading ? 'Entrando...' : 'Entrar'}</button>
         <p className="muted small">Demo: admin@aguittech.com / admin123</p>
         <p style={{ textAlign: 'center', marginTop: 12 }}>
+          ¿No tienes cuenta?{' '}
+          <Link to="/register" style={{ color: 'var(--accent, #FF6A00)', textDecoration: 'none', fontWeight: 600 }}>
+            Crear cuenta
+          </Link>
+        </p>
+        <p style={{ textAlign: 'center', marginTop: 8 }}>
           <Link to="/public/blog" style={{ color: 'var(--accent, #FF6A00)', textDecoration: 'none' }}>
             📰 Leer el blog público
           </Link>
