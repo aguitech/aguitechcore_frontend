@@ -245,6 +245,104 @@ def test_sitemap(c):
     record("GET /api/sitemap.xml alias → 200", status2 == 200, f"status={status2}")
 
 
+def test_public_comments(c, admin_email, admin_pwd):
+    section("3c. Public blog comments")
+    # First, find a published post. We use the first one from the public
+    # listing — it has its _id populated and is guaranteed to be published.
+    status, listing = c.get("/api/blog/public/posts", params={"limit": 5}, expect=200)
+    items = listing.get("items", [])
+    if not items:
+        record("at least one published post available", False, "no posts in listing")
+        return
+    target = items[0]
+    post_id = target["_id"]
+    slug = target["slug"]
+    title = target["title"]
+
+    # 1. GET /api/blog/public/posts/:slug must include a `comments` array
+    #    (may be empty if this particular post has none). The shape contract
+    #    is the key thing — frontend uses .comments.length to render.
+    status, body = c.get(f"/api/blog/public/posts/{slug}", expect=200)
+    has_field = isinstance(body, dict) and "comments" in body
+    record(
+        f"public detail includes 'comments' field for '{title[:40]}'",
+        has_field,
+        f"keys={list(body.keys())[:8] if isinstance(body, dict) else type(body)}",
+    )
+    if has_field:
+        record(
+            f"'comments' is an array (len={len(body['comments'])})",
+            isinstance(body["comments"], list),
+            f"type={type(body['comments']).__name__}",
+        )
+
+    # 2. Anonymous user CANNOT post a comment (no auth → 401)
+    saved_token = c.token
+    c.token = None
+    try:
+        c.post(
+            f"/api/blog/posts/{post_id}/comments",
+            body={"text": "spam anonymous"},
+            expect=401,
+        )
+        record("anonymous POST comment → 401", True)
+    except AssertionError as e:
+        record("anonymous POST comment → 401", False, str(e))
+
+    # 3. Login as admin, post a unique comment, verify it lands.
+    _, login_body = c.post(
+        "/api/auth/login",
+        body={"email": admin_email, "password": admin_pwd},
+        expect=200,
+    )
+    c.token = login_body["token"]
+    admin_id = login_body["user"]["_id"]
+
+    marker = f"[E2E comment marker {int(time.time())}]"
+    try:
+        status, created = c.post(
+            f"/api/blog/posts/{post_id}/comments",
+            body={"text": marker},
+            expect=201,
+        )
+        record("admin POST comment → 201", status == 201, f"status={status}")
+        record(
+            "comment has _id + authorName snapshot",
+            created.get("_id") and created.get("authorName"),
+            f"got={list(created.keys()) if isinstance(created, dict) else created}",
+        )
+    except AssertionError as e:
+        record("admin POST comment → 201", False, str(e))
+        c.token = saved_token
+        return
+
+    # 4. Re-fetch the public detail and confirm the new comment is there.
+    #    Use raw urllib to bypass the JSON-only logic (we want raw string OK).
+    try:
+        url = f"{c.base}/api/blog/public/posts/{slug}"
+        req = urllib.request.Request(url)
+        with urllib.request.urlopen(req, timeout=20) as r:
+            raw = r.read().decode("utf-8", errors="replace")
+        record(
+            f"new comment visible in public detail (marker found)",
+            marker in raw,
+            f"len(raw)={len(raw)} marker={marker[:30]!r}",
+        )
+    except Exception as e:
+        record("refetch public detail OK", False, str(e))
+
+    # 5. Count via API list endpoint for sanity (cross-check).
+    _, after = c.get(f"/api/blog/public/posts/{slug}", expect=200)
+    comment_count = len(after.get("comments", []))
+    record(
+        f"comment count ≥ 1 after insert (got {comment_count})",
+        comment_count >= 1,
+        f"count={comment_count}",
+    )
+
+    # Restore prior token state for the rest of the suite
+    c.token = saved_token
+
 def test_appointments_public(c, admin_user_id):
     section("4. Public appointment booking (no auth)")
     # Pick a date 7 days from now to avoid clashes
@@ -448,6 +546,7 @@ def main():
     c.last_admin_password = args.admin_password
     test_public_blog(c)
     test_sitemap(c)
+    test_public_comments(c, args.admin_email, args.admin_password)
     appt_id, starts, ends = test_appointments_public(c, admin_user_id)
     test_appointments_admin(c, appt_id)
     test_notifications(c, appt_id, member_id)

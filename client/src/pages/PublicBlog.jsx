@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link, useParams, useSearchParams } from 'react-router-dom';
 import api from '../services/api.js';
+import { useAuth } from '../context/AuthContext.jsx';
 import '../styles/public.css';
 
 // =============================================================
@@ -26,6 +27,43 @@ function fmtSize(b) {
 
 function isExternal(url) {
   return /^https?:\/\//i.test(url);
+}
+
+// Relative time formatter — "hace 3 min", "hace 2 h", "hace 5 d".
+// Uses Intl.RelativeTimeFormat under the hood; falls back to the absolute
+// date if the input is missing or unparseable.
+function fmtRelative(iso) {
+  if (!iso) return '';
+  const then = new Date(iso).getTime();
+  if (Number.isNaN(then)) return '';
+  const diffSec = Math.round((then - Date.now()) / 1000);
+  const absSec = Math.abs(diffSec);
+  const rtf = new Intl.RelativeTimeFormat('es', { numeric: 'auto' });
+  if (absSec < 60) return rtf.format(diffSec, 'second');
+  if (absSec < 3600) return rtf.format(Math.round(diffSec / 60), 'minute');
+  if (absSec < 86400) return rtf.format(Math.round(diffSec / 3600), 'hour');
+  if (absSec < 86400 * 30) return rtf.format(Math.round(diffSec / 86400), 'day');
+  if (absSec < 86400 * 365) return rtf.format(Math.round(diffSec / (86400 * 30)), 'month');
+  return rtf.format(Math.round(diffSec / (86400 * 365)), 'year');
+}
+
+// Avatar fallback — first letter of the first + last word, uppercase.
+// "Hector Aguilar" → "HA". Single name → first two letters.
+function initialsFor(name) {
+  if (!name) return '·';
+  const parts = String(name).trim().split(/\s+/);
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+}
+
+// Deterministic color for an avatar based on the name hash — same author
+// always gets the same color across the blog.
+function colorForName(name) {
+  if (!name) return '#888';
+  let h = 0;
+  for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) | 0;
+  const hue = Math.abs(h) % 360;
+  return `hsl(${hue} 60% 45%)`;
 }
 
 // ----- listing -----
@@ -183,10 +221,17 @@ export function PublicBlogList() {
 // ----- single post -----
 export function PublicBlogPost() {
   const { slug } = useParams();
+  const { user } = useAuth(); // null if anonymous; the comment form gates on this
   const [post, setPost] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [lightboxIdx, setLightboxIdx] = useState(null);
+
+  // Comment form state
+  const [commentText, setCommentText] = useState('');
+  const [commentBusy, setCommentBusy] = useState(false);
+  const [commentError, setCommentError] = useState('');
+  const [commentFlash, setCommentFlash] = useState('');
 
   useEffect(() => {
     setLoading(true);
@@ -215,6 +260,44 @@ export function PublicBlogPost() {
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, [lightboxIdx, post]);
+
+  async function submitComment(e) {
+    e.preventDefault();
+    if (!user) return; // UI prevents this — defensive guard
+    const text = commentText.trim();
+    if (!text) {
+      setCommentError('Escribe algo antes de publicar');
+      return;
+    }
+    if (text.length > 2000) {
+      setCommentError('El comentario no puede pasar de 2000 caracteres');
+      return;
+    }
+    setCommentBusy(true);
+    setCommentError('');
+    setCommentFlash('');
+    try {
+      const r = await api.post(`/blog/posts/${post._id}/comments`, { text });
+      // Append the new comment optimistically — the server already saved it.
+      // The shape returned is the lean comment doc; merge it into local state.
+      const newComment = {
+        ...r.data,
+        authorName: r.data.author?.name || user.name || user.email,
+      };
+      setPost((p) => ({ ...p, comments: [...(p.comments || []), newComment] }));
+      setCommentText('');
+      setCommentFlash('¡Comentario publicado!');
+      setTimeout(() => setCommentFlash(''), 3000);
+    } catch (err) {
+      if (err.response?.status === 401) {
+        setCommentError('Tu sesión expiró. Inicia sesión de nuevo.');
+      } else {
+        setCommentError(err.response?.data?.msg || 'Error al publicar el comentario');
+      }
+    } finally {
+      setCommentBusy(false);
+    }
+  }
 
   if (loading) {
     return (
@@ -351,6 +434,78 @@ export function PublicBlogPost() {
             </ul>
           </section>
         )}
+
+        {/* comments */}
+        <section className="post-section comments-section">
+          <h3>
+            💬 Comentarios · {post.comments?.length || 0}
+          </h3>
+
+          {post.comments && post.comments.length > 0 ? (
+            <ul className="comment-list">
+              {post.comments.map((c) => {
+                const name = c.authorName || c.author?.name || 'Anónimo';
+                return (
+                  <li key={c._id} className="comment-item">
+                    <div
+                      className="comment-avatar"
+                      style={{ background: colorForName(name) }}
+                      aria-hidden="true"
+                    >
+                      {initialsFor(name)}
+                    </div>
+                    <div className="comment-body">
+                      <div className="comment-head">
+                        <strong>{name}</strong>
+                        <span className="muted small" title={fmtDate(c.createdAt)}>
+                          {fmtRelative(c.createdAt) || fmtDate(c.createdAt)}
+                        </span>
+                      </div>
+                      <p className="comment-text">{c.text}</p>
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
+          ) : (
+            <p className="muted">Sé el primero en comentar.</p>
+          )}
+
+          {/* comment composer — gated by auth */}
+          {user ? (
+            <form className="comment-form" onSubmit={submitComment}>
+              <textarea
+                value={commentText}
+                onChange={(e) => setCommentText(e.target.value)}
+                placeholder={`Escribe un comentario como ${user.name || user.email}…`}
+                maxLength={2000}
+                rows={3}
+                disabled={commentBusy}
+              />
+              <div className="comment-form-actions">
+                <span className="muted small">
+                  {commentText.length} / 2000
+                </span>
+                <button
+                  type="submit"
+                  className="btn primary"
+                  disabled={commentBusy || commentText.trim().length === 0}
+                >
+                  {commentBusy ? 'Publicando…' : 'Comentar'}
+                </button>
+              </div>
+              {commentError && <div className="banner error">{commentError}</div>}
+              {commentFlash && <div className="banner success">{commentFlash}</div>}
+            </form>
+          ) : (
+            <div className="comment-login-prompt">
+              <p className="muted">Inicia sesión para dejar un comentario.</p>
+              <Link to="/login" className="btn primary">
+                Iniciar sesión
+              </Link>
+            </div>
+          )}
+        </section>
 
         <footer className="public-post-footer">
           <Link to="/public/blog" className="btn ghost">← Volver al blog</Link>
