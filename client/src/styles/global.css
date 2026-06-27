@@ -1673,3 +1673,42 @@ pre.body {
   width: 100%;
   margin-top: 0.5rem;
 }
+
+/* ----- Auth brand block (Login + Register) ----- */
+
+.auth-brand {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.25rem;
+}
+
+.auth-logo {
+  display: block;
+  width: 180px;
+  max-width: 70%;
+  height: auto;
+  margin: 0 auto 0.25rem;
+  user-select: none;
+  -webkit-user-drag: none;
+  /* Subtle drop-shadow so the logo reads against any background. */
+  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.15));
+}
+
+.auth-title {
+  margin: 0;
+  text-align: center;
+  font-size: 1.5rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+.auth-tagline {
+  text-align: center;
+  margin: 0 0 1.25rem;
+  font-size: 0.92rem;
+}
+
+/* Keep the existing .card form layout breathing room. */
+.auth-wrap .card { padding: 2rem; }

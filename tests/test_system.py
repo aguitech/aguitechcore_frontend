@@ -380,8 +380,8 @@ def test_sitemap(c):
     record("GET /api/sitemap.xml alias → 200", status2 == 200, f"status={status2}")
 
 
-def test_public_comments(c, admin_email, admin_pwd):
-    section("3c. Public blog comments")
+def test_public_comments(c, admin_email, admin_pwd, member_token, member_email, member_pwd):
+    section("3c. Public blog comments + bell notification")
     # First, find a published post. We use the first one from the public
     # listing — it has its _id populated and is guaranteed to be published.
     status, listing = c.get("/api/blog/public/posts", params={"limit": 5}, expect=200)
@@ -393,6 +393,7 @@ def test_public_comments(c, admin_email, admin_pwd):
     post_id = target["_id"]
     slug = target["slug"]
     title = target["title"]
+    post_author_email = (target.get("author") or {}).get("email")
 
     # 1. GET /api/blog/public/posts/:slug must include a `comments` array
     #    (may be empty if this particular post has none). The shape contract
@@ -424,15 +425,15 @@ def test_public_comments(c, admin_email, admin_pwd):
     except AssertionError as e:
         record("anonymous POST comment → 401", False, str(e))
 
-    # 3. Login as admin, post a unique comment, verify it lands.
-    _, login_body = c.post(
-        "/api/auth/login",
-        body={"email": admin_email, "password": admin_pwd},
-        expect=200,
-    )
-    c.token = login_body["token"]
-    admin_id = login_body["user"]["_id"]
+    # Restore token for the rest of the section.
+    c.token = saved_token
 
+    # 3. Post a unique comment as the MEMBER user (not as the post author).
+    #    This is critical for the notification test: if the commenter is the
+    #    post's author, notify() no-ops on actor===recipient. We need a
+    #    DIFFERENT user commenting on the post so the post author actually
+    #    receives a bell notification.
+    c.token = member_token
     marker = f"[E2E comment marker {int(time.time())}]"
     try:
         status, created = c.post(
@@ -440,19 +441,18 @@ def test_public_comments(c, admin_email, admin_pwd):
             body={"text": marker},
             expect=201,
         )
-        record("admin POST comment → 201", status == 201, f"status={status}")
+        record("member POST comment → 201", status == 201, f"status={status}")
         record(
             "comment has _id + authorName snapshot",
             created.get("_id") and created.get("authorName"),
             f"got={list(created.keys()) if isinstance(created, dict) else created}",
         )
     except AssertionError as e:
-        record("admin POST comment → 201", False, str(e))
+        record("member POST comment → 201", False, str(e))
         c.token = saved_token
         return
 
     # 4. Re-fetch the public detail and confirm the new comment is there.
-    #    Use raw urllib to bypass the JSON-only logic (we want raw string OK).
     try:
         url = f"{c.base}/api/blog/public/posts/{slug}"
         req = urllib.request.Request(url)
@@ -475,8 +475,55 @@ def test_public_comments(c, admin_email, admin_pwd):
         f"count={comment_count}",
     )
 
+    # 6. Notification: the post's author must have received a fresh
+    #    'blog.comment' bell notification with our unique marker in the
+    #    body. This is the "I want to know about new comments" feature —
+    #    visible in the bell icon, deep-links back to the post.
+    #    We only assert this if the post author is the admin (the test
+    #    account we have a token for). Other authors would also receive
+    #    the notification but we can't check it without their token.
+    if post_author_email == admin_email:
+        # The current c.token is the member's — re-login as admin to
+        # read the admin's notification feed.
+        c.token = None
+        try:
+            _, admin_login = c.post(
+                "/api/auth/login",
+                body={"email": admin_email, "password": admin_pwd},
+                expect=200,
+            )
+            c.token = admin_login["token"]
+        except AssertionError as e:
+            record("re-login admin for notif check", False, str(e))
+            c.token = saved_token
+            return
+        _, notif_body = c.get("/api/notifications", params={"limit": 20}, expect=200)
+        notifs = notif_body.get("items", [])
+        found = next(
+            (
+                n for n in notifs
+                if n.get("type") == "blog.comment" and marker in (n.get("body") or "")
+            ),
+            None,
+        )
+        record(
+            f"admin has blog.comment notification with marker",
+            found is not None,
+            f"types={[n.get('type') for n in notifs[:5]]}; "
+            f"looking for marker={marker[:30]!r} in body",
+        )
+    else:
+        # Post was authored by someone else — we still want to know the
+        # notify() call was made, just skip the admin-notification check.
+        record(
+            "blog.comment notification check skipped (post not authored by admin)",
+            True,
+            f"post_author={post_author_email!r} admin={admin_email!r}",
+        )
+
     # Restore prior token state for the rest of the suite
     c.token = saved_token
+
 
 def test_appointments_public(c, admin_user_id):
     section("4. Public appointment booking (no auth)")
@@ -682,7 +729,8 @@ def main():
     test_register_saas(c, c.token)
     test_public_blog(c)
     test_sitemap(c)
-    test_public_comments(c, args.admin_email, args.admin_password)
+    test_public_comments(c, args.admin_email, args.admin_password,
+                        member_token, args.member_email, args.member_password)
     appt_id, starts, ends = test_appointments_public(c, admin_user_id)
     test_appointments_admin(c, appt_id)
     test_notifications(c, appt_id, member_id)

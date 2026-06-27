@@ -2,6 +2,7 @@ import mongoose from 'mongoose';
 import path from 'path';
 import fs from 'fs';
 import { Post, BlogCategory } from '../models/Post.js';
+import { notify } from '../lib/notify.js';
 
 // ===== helpers =====
 const idOf = (field) => {
@@ -510,13 +511,35 @@ export async function addComment(req, res, next) {
     if (!mongoose.isValidObjectId(id)) return res.status(400).json({ msg: 'ID inválido' });
     const post = await Post.findById(id);
     if (!post) return res.status(404).json({ msg: 'Publicación no encontrada' });
+    const trimmed = text.trim().slice(0, 2000);
     post.comments.push({
-      text: text.trim().slice(0, 2000),
+      text: trimmed,
       author: req.user._id,
       authorName: req.user.name || req.user.email || '',
     });
     await post.save();
     const c = post.comments[post.comments.length - 1];
+
+    // Fire a bell-notification to the post's author (if the commenter is
+    // someone else). notify() no-ops if actor === recipient, so we don't
+    // need to guard that here.
+    const postAuthorId = idOf(post.author);
+    if (postAuthorId) {
+      const preview = trimmed.length > 120 ? trimmed.slice(0, 117) + '…' : trimmed;
+      notify({
+        recipient: postAuthorId,
+        type: 'blog.comment',
+        title: `💬 Nuevo comentario en "${post.title}"`,
+        body: `${req.user.name || req.user.email || 'Alguien'} comentó: ${preview}`,
+        link: `/public/blog/${post.slug}`,
+        sourceType: 'Post',
+        sourceId: String(post._id),
+        meta: { commentId: String(c._id), slug: post.slug },
+        actor: req.user._id,
+        actorName: req.user.name || req.user.email || '',
+      });
+    }
+
     res.status(201).json({ ...c.toObject(), author: { _id: req.user._id, name: req.user.name, email: req.user.email } });
   } catch (err) {
     next(err);

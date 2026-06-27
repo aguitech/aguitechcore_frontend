@@ -104,11 +104,19 @@ export default function Register() {
 
   return (
     <div className="auth-wrap">
-      <form className="card" onSubmit={onSubmit} noValidate>
-        <h1>🚀 Crear cuenta</h1>
-        <p className="muted">Únete a Aguittech Core — gratis y en menos de un minuto.</p>
+      <form className="card" onSubmit={onSubmit} autoComplete="on" noValidate>
+        <div className="auth-brand">
+          <img
+            src="/img/logo.png"
+            alt="Aguitech"
+            className="auth-logo"
+            draggable="false"
+          />
+          <h1 className="auth-title">Aguitech</h1>
+        </div>
+        <p className="muted auth-tagline">Crea tu cuenta gratis</p>
 
-        {error && <div className="alert">{error}</div>}
+        {error && <div className="alert" role="alert">{error}</div>}
 
         <label>
           Nombre
