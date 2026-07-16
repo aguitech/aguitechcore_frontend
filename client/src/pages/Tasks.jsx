@@ -528,8 +528,20 @@ function TaskDetail({ task, me, onClose, onChanged, onEdit, onStatusChange, onDe
           <header>
             <h4>🖼️ Imágenes ({task.images?.length || 0})</h4>
             <div>
-              <input ref={imgInput} type="file" accept="image/*" multiple style={{ display: 'none' }} onChange={(e) => upload('images', e.target.files)} />
-              <button className="ghost small" disabled={uploading === 'images'} onClick={() => imgInput.current?.click()}>
+              <input
+                ref={imgInput}
+                type="file"
+                accept="image/*"
+                multiple
+                style={{ display: 'none' }}
+                onClick={(e) => e.stopPropagation()}
+                onChange={(e) => { e.stopPropagation(); upload('images', e.target.files); }}
+              />
+              <button
+                className="ghost small"
+                disabled={uploading === 'images'}
+                onClick={(e) => { e.stopPropagation(); imgInput.current?.click(); }}
+              >
                 {uploading === 'images' ? 'Subiendo…' : '+ Subir'}
               </button>
             </div>
@@ -557,8 +569,20 @@ function TaskDetail({ task, me, onClose, onChanged, onEdit, onStatusChange, onDe
           <header>
             <h4>🎥 Videos ({task.videos?.length || 0})</h4>
             <div>
-              <input ref={vidInput} type="file" accept="video/*" multiple style={{ display: 'none' }} onChange={(e) => upload('videos', e.target.files)} />
-              <button className="ghost small" disabled={uploading === 'videos'} onClick={() => vidInput.current?.click()}>
+              <input
+                ref={vidInput}
+                type="file"
+                accept="video/*"
+                multiple
+                style={{ display: 'none' }}
+                onClick={(e) => e.stopPropagation()}
+                onChange={(e) => { e.stopPropagation(); upload('videos', e.target.files); }}
+              />
+              <button
+                className="ghost small"
+                disabled={uploading === 'videos'}
+                onClick={(e) => { e.stopPropagation(); vidInput.current?.click(); }}
+              >
                 {uploading === 'videos' ? 'Subiendo…' : '+ Subir'}
               </button>
             </div>
@@ -592,12 +616,13 @@ function TaskDetail({ task, me, onClose, onChanged, onEdit, onStatusChange, onDe
                 type="file"
                 multiple
                 style={{ display: 'none' }}
-                onChange={(e) => upload('documents', e.target.files)}
+                onClick={(e) => e.stopPropagation()}
+                onChange={(e) => { e.stopPropagation(); upload('documents', e.target.files); }}
               />
               <button
                 className="ghost small"
                 disabled={uploading === 'documents'}
-                onClick={() => docInput.current?.click()}
+                onClick={(e) => { e.stopPropagation(); docInput.current?.click(); }}
               >
                 {uploading === 'documents' ? 'Subiendo…' : '+ Subir archivos'}
               </button>
@@ -609,7 +634,7 @@ function TaskDetail({ task, me, onClose, onChanged, onEdit, onStatusChange, onDe
             onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
             onDragLeave={() => setDragOver(false)}
             onDrop={onDrop}
-            onClick={() => docInput.current?.click()}
+            onClick={(e) => { e.stopPropagation(); docInput.current?.click(); }}
             role="button"
             tabIndex={0}
           >
