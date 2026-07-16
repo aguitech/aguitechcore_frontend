@@ -371,6 +371,8 @@ function TaskDetail({ task, me, onClose, onChanged, onEdit, onStatusChange, onDe
   const [rejected, setRejected] = useState([]);
   const [previewDoc, setPreviewDoc] = useState(null);
   const [dragOver, setDragOver] = useState(false);
+  const [dragOverImg, setDragOverImg] = useState(false);
+  const [dragOverVid, setDragOverVid] = useState(false);
   // Links state
   const [linkUrl, setLinkUrl] = useState('');
   const [linkTitle, setLinkTitle] = useState('');
@@ -413,11 +415,32 @@ function TaskDetail({ task, me, onClose, onChanged, onEdit, onStatusChange, onDe
     }
   }
 
-  function onDrop(e) {
+  function onDrop(e, kind) {
     e.preventDefault();
     setDragOver(false);
+    setDragOverImg(false);
+    setDragOverVid(false);
     const files = Array.from(e.dataTransfer.files || []);
-    if (files.length > 0) upload('documents', files);
+    if (files.length === 0) return;
+    if (kind === 'images') {
+      // Filter to image/* only — server enforces this too, but a friendly client-side
+      // warning saves a round-trip when the user drops a video in the image zone.
+      const accepted = files.filter((f) => /^image\//.test(f.type) || /\.(jpe?g|png|gif|webp|bmp|svg|heic|heif|avif)$/i.test(f.name));
+      const rejected = files.filter((f) => !accepted.includes(f));
+      if (rejected.length > 0) {
+        setRejected(rejected.map((f) => ({ filename: f.name, error: 'No es una imagen (jpg/png/gif/webp/heic/avif)' })));
+      }
+      if (accepted.length > 0) upload('images', accepted);
+    } else if (kind === 'videos') {
+      const accepted = files.filter((f) => /^video\//.test(f.type) || /\.(mp4|webm|mov|m4v|3gp|ogv)$/i.test(f.name));
+      const rejected = files.filter((f) => !accepted.includes(f));
+      if (rejected.length > 0) {
+        setRejected(rejected.map((f) => ({ filename: f.name, error: 'No es un video (mp4/webm/mov/m4v)' })));
+      }
+      if (accepted.length > 0) upload('videos', accepted);
+    } else {
+      upload('documents', files);
+    }
   }
 
   async function removeFile(kind, fileId) {
@@ -555,8 +578,26 @@ function TaskDetail({ task, me, onClose, onChanged, onEdit, onStatusChange, onDe
               </button>
             </div>
           </header>
+          <div
+            className={`drop-zone ${dragOverImg ? 'drag-over' : ''}`}
+            onDragOver={(e) => { e.preventDefault(); setDragOverImg(true); }}
+            onDragLeave={() => setDragOverImg(false)}
+            onDrop={(e) => onDrop(e, 'images')}
+            onClick={(e) => { e.stopPropagation(); imgInput.current?.click(); }}
+            role="button"
+            tabIndex={0}
+          >
+            <span className="drop-zone-icon">🖼️</span>
+            <span>Arrastra imágenes aquí, o haz click para seleccionar</span>
+            <small className="muted">
+              .jpg, .png, .gif, .webp, .heic, .avif… (máx. 15 MB por imagen)
+            </small>
+          </div>
+
           {(!task.images || task.images.length === 0) ? (
-            <p className="muted small">Aún no hay imágenes. Adjunta capturas, mockups, fotos…</p>
+            <p className="muted small" style={{ marginTop: 8 }}>
+              Aún no hay imágenes. Arrastra arriba o usa “+ Subir” para adjuntar capturas, mockups, fotos…
+            </p>
           ) : (
             <div className="media-grid">
               {task.images.map((img) => (
@@ -595,8 +636,26 @@ function TaskDetail({ task, me, onClose, onChanged, onEdit, onStatusChange, onDe
               </button>
             </div>
           </header>
+          <div
+            className={`drop-zone ${dragOverVid ? 'drag-over' : ''}`}
+            onDragOver={(e) => { e.preventDefault(); setDragOverVid(true); }}
+            onDragLeave={() => setDragOverVid(false)}
+            onDrop={(e) => onDrop(e, 'videos')}
+            onClick={(e) => { e.stopPropagation(); vidInput.current?.click(); }}
+            role="button"
+            tabIndex={0}
+          >
+            <span className="drop-zone-icon">🎥</span>
+            <span>Arrastra videos aquí, o haz click para seleccionar</span>
+            <small className="muted">
+              .mp4, .webm, .mov, .m4v… (máx. 100 MB por video)
+            </small>
+          </div>
+
           {(!task.videos || task.videos.length === 0) ? (
-            <p className="muted small">Sin videos. Adjunta screen recordings, demos, reels…</p>
+            <p className="muted small" style={{ marginTop: 8 }}>
+              Sin videos. Arrastra arriba o usa “+ Subir” para adjuntar screen recordings, demos, reels…
+            </p>
           ) : (
             <div className="media-list">
               {task.videos.map((v) => (
