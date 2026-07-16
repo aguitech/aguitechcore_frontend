@@ -390,9 +390,12 @@ function TaskDetail({ task, me, onClose, onChanged, onEdit, onStatusChange, onDe
       const fd = new FormData();
       for (const f of files) fd.append('files', f);
       const endpoint = kind === 'documents' ? `/tasks/${task._id}/documents` : `/tasks/${task._id}/${kind}`;
-      const { data } = await api.post(endpoint, fd, {
-        headers: { 'Content-Type': 'multipart/form-data' },
-      });
+      // IMPORTANT: do NOT set Content-Type manually here. Axios sets the
+      // correct `multipart/form-data; boundary=...` automatically when the body
+      // is a FormData instance. Forcing it without the boundary makes the
+      // backend multer unable to parse the parts (the "no files" / silent
+      // failure you saw). Just send the FormData as-is.
+      const { data } = await api.post(endpoint, fd);
       // /documents returns { task, rejected }
       if (kind === 'documents') {
         onChanged(data.task);
