@@ -244,9 +244,10 @@ export default function Blog() {
             const fd = new FormData();
             for (const f of g.files) fd.append('files', f);
             try {
-              await api.post(`/blog/posts/${savedId}/${g.kind}`, fd, {
-                headers: { 'Content-Type': 'multipart/form-data' },
-              });
+              // IMPORTANT: do NOT set Content-Type manually. Axios auto-sets
+              // `multipart/form-data; boundary=...` for FormData bodies. Forcing
+              // it without the boundary breaks multer's part parsing silently.
+              await api.post(`/blog/posts/${savedId}/${g.kind}`, fd);
               totalUploaded += g.files.length;
             } catch (err) {
               console.error(`failed to upload ${g.kind}:`, err);
@@ -316,9 +317,9 @@ export default function Blog() {
   async function attachFiles(post, kind, fileList) {
     const fd = new FormData();
     for (const f of fileList) fd.append('files', f);
-    await api.post(`/blog/posts/${post._id}/${kind}`, fd, {
-      headers: { 'Content-Type': 'multipart/form-data' },
-    });
+    // IMPORTANT: do NOT set Content-Type manually. Axios auto-sets
+    // `multipart/form-data; boundary=...` for FormData bodies.
+    await api.post(`/blog/posts/${post._id}/${kind}`, fd);
     setToast({ type: 'success', text: `${fileList.length} archivo(s) subido(s)` });
     await loadAll();
     if (detail?._id === post._id) {
@@ -987,9 +988,9 @@ function PostDetailModal({
                         }
                         const fd = new FormData();
                         fd.append('files', file);
-                        await api.post(`/blog/posts/${post._id}/images`, fd, {
-                          headers: { 'Content-Type': 'multipart/form-data' },
-                        });
+                        // IMPORTANT: do NOT set Content-Type manually. Axios
+                        // auto-sets `multipart/form-data; boundary=...` for FormData bodies.
+                        await api.post(`/blog/posts/${post._id}/images`, fd);
                         const r = await api.get(`/blog/posts/${post._id}`);
                         setForm({ ...form, coverImage: r.data.coverImage || '' });
                         setToast?.({ type: 'success', text: 'Imagen subida' });

@@ -453,9 +453,11 @@ export default function Chat() {
         const fd = new FormData();
         if (text.trim()) fd.append('text', text.trim());
         for (const f of stagedFiles) fd.append('files', f);
-        res = await api.post(`/chat/conversations/${activeId}/messages`, fd, {
-          headers: { 'Content-Type': 'multipart/form-data' },
-        });
+        // IMPORTANT: do NOT set Content-Type manually here. Axios sets the
+        // correct `multipart/form-data; boundary=...` automatically when the body
+        // is a FormData instance. Forcing it without the boundary makes the
+        // backend multer unable to parse the parts. Just send the FormData as-is.
+        res = await api.post(`/chat/conversations/${activeId}/messages`, fd);
       } else {
         res = await api.post(`/chat/conversations/${activeId}/messages`, { text });
       }
