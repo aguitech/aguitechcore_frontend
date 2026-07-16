@@ -1424,12 +1424,13 @@ function CoverImageField({ value, onChange, post, canEdit, onUpload }) {
           type="file"
           accept="image/*"
           style={{ display: 'none' }}
-          onChange={(e) => handleFile(e.target.files?.[0])}
+          onClick={(e) => e.stopPropagation()}
+          onChange={(e) => { e.stopPropagation(); handleFile(e.target.files?.[0]); }}
         />
         <button
           type="button"
           className={`btn primary ${dragOver ? 'dragging' : ''}`}
-          onClick={() => fileRef.current?.click()}
+          onClick={(e) => { e.stopPropagation(); fileRef.current?.click(); }}
           onDragOver={(e) => {
             e.preventDefault();
             setDragOver(true);
@@ -1662,7 +1663,8 @@ function PendingUploads({ kind, accept, files, onChange, uploadLabel }) {
   const [dragOver, setDragOver] = useState(false);
   const [error, setError] = useState('');
 
-  function pick() {
+  function pick(e) {
+    e?.stopPropagation();
     inputRef.current?.click();
   }
 
@@ -1808,7 +1810,9 @@ function PendingUploads({ kind, accept, files, onChange, uploadLabel }) {
           accept={accept}
           multiple
           style={{ display: 'none' }}
+          onClick={(e) => e.stopPropagation()}
           onChange={(e) => {
+            e.stopPropagation();
             handleFiles(Array.from(e.target.files || []));
             if (inputRef.current) inputRef.current.value = '';
           }}
@@ -1816,7 +1820,7 @@ function PendingUploads({ kind, accept, files, onChange, uploadLabel }) {
         <button
           type="button"
           className={`btn primary ${dragOver ? 'dragging' : ''}`}
-          onClick={pick}
+          onClick={(e) => pick(e)}
           onDragOver={(e) => {
             e.preventDefault();
             setDragOver(true);
@@ -2003,7 +2007,8 @@ function AttachmentGallery({
   const [uploading, setUploading] = useState(false);
   const [dragOver, setDragOver] = useState(false);
 
-  function pick() {
+  function pick(e) {
+    e?.stopPropagation();
     if (readOnly) return;
     inputRef.current?.click();
   }
@@ -2105,13 +2110,14 @@ function AttachmentGallery({
             accept={accept}
             multiple
             style={{ display: 'none' }}
-            onChange={onChange}
+            onClick={(e) => e.stopPropagation()}
+            onChange={(e) => { e.stopPropagation(); onChange(e); }}
           />
         )}
         <button
           type="button"
           className={`btn primary ${dragOver ? 'dragging' : ''}`}
-          onClick={pick}
+          onClick={(e) => pick(e)}
           disabled={uploading || readOnly}
           onDragOver={(e) => {
             e.preventDefault();

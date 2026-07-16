@@ -732,12 +732,13 @@ export default function Chat() {
                   type="file"
                   multiple
                   style={{ display: 'none' }}
-                  onChange={onPickFiles}
+                  onClick={(e) => e.stopPropagation()}
+                  onChange={(e) => { e.stopPropagation(); onPickFiles(e); }}
                 />
                 <button
                   type="button"
                   className="ghost"
-                  onClick={() => fileInputRef.current?.click()}
+                  onClick={(e) => { e.stopPropagation(); fileInputRef.current?.click(); }}
                   title="Adjuntar foto, video o archivo"
                   disabled={sending}
                   style={{ fontSize: '1.2em', padding: '6px 10px' }}
