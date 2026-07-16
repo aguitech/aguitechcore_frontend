@@ -12,6 +12,7 @@ import {
   uploadAttachments,
 } from '../controllers/chat.controller.js';
 import { requireAuth } from '../middleware/auth.js';
+import { makeImageFilter, makeVideoFilter, makeDocumentFilter } from '../lib/mediaFilters.js';
 
 const router = Router();
 router.use(requireAuth);
@@ -35,15 +36,9 @@ const diskStorage = multer.diskStorage({
 // Memory storage for non-image/video files (need buffer for magic-byte check)
 const memStorage = multer.memoryStorage();
 
-const imageFilter = (_req, file, cb) => {
-  if (/^image\//.test(file.mimetype)) cb(null, true);
-  else cb(new Error('Solo se permiten imágenes'));
-};
-const videoFilter = (_req, file, cb) => {
-  if (/^video\//.test(file.mimetype)) cb(null, true);
-  else cb(new Error('Solo se permiten videos'));
-};
-const docFilter = (_req, _file, cb) => cb(null, true);
+const imageFilter = makeImageFilter();
+const videoFilter = makeVideoFilter();
+const docFilter = makeDocumentFilter();
 
 const uploadImages = multer({ storage: diskStorage, fileFilter: imageFilter, limits: { fileSize: 15 * 1024 * 1024 } });
 const uploadVideos = multer({ storage: diskStorage, fileFilter: videoFilter, limits: { fileSize: 100 * 1024 * 1024 } });

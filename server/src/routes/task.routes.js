@@ -17,6 +17,7 @@ import {
   deleteLink,
 } from '../controllers/task.controller.js';
 import { requireAuth } from '../middleware/auth.js';
+import { makeImageFilter, makeVideoFilter, makeDocumentFilter } from '../lib/mediaFilters.js';
 
 const router = Router();
 router.use(requireAuth);
@@ -41,18 +42,10 @@ const diskStorage = multer.diskStorage({
 // magic bytes before the file is written to disk.
 const memStorage = multer.memoryStorage();
 
-const imageFilter = (_req, file, cb) => {
-  if (/^image\//.test(file.mimetype)) cb(null, true);
-  else cb(new Error('Solo se permiten imágenes (jpg, png, webp, gif)'));
-};
-
-const videoFilter = (_req, file, cb) => {
-  if (/^video\//.test(file.mimetype)) cb(null, true);
-  else cb(new Error('Solo se permiten videos (mp4, webm, mov)'));
-};
-
 // Permissive MIME filter for documents — fileGuard does the real check
-const documentFilter = (_req, file, cb) => cb(null, true);
+const imageFilter = makeImageFilter();
+const videoFilter = makeVideoFilter();
+const documentFilter = makeDocumentFilter();
 
 const uploadImages = multer({ storage: diskStorage, fileFilter: imageFilter, limits: { fileSize: 15 * 1024 * 1024 } });
 const uploadVideos = multer({ storage: diskStorage, fileFilter: videoFilter, limits: { fileSize: 100 * 1024 * 1024 } });

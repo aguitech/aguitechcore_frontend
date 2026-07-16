@@ -24,6 +24,7 @@ import {
   getPublicPostBySlug,
 } from '../controllers/post.controller.js';
 import { requireAuth } from '../middleware/auth.js';
+import { makeImageFilter, makeVideoFilter, makeDocumentFilter } from '../lib/mediaFilters.js';
 
 const router = Router();
 
@@ -45,15 +46,9 @@ const diskStorage = multer.diskStorage({
 
 const memStorage = multer.memoryStorage();
 
-const imageFilter = (_req, file, cb) => {
-  if (/^image\//.test(file.mimetype)) cb(null, true);
-  else cb(new Error('Solo se permiten imágenes (jpg, png, webp, gif)'));
-};
-const videoFilter = (_req, file, cb) => {
-  if (/^video\//.test(file.mimetype)) cb(null, true);
-  else cb(new Error('Solo se permiten videos (mp4, webm, mov)'));
-};
-const documentFilter = (_req, file, cb) => cb(null, true);
+const imageFilter = makeImageFilter();
+const videoFilter = makeVideoFilter();
+const documentFilter = makeDocumentFilter();
 
 const uploadImages = multer({
   storage: diskStorage,
