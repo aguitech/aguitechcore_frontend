@@ -496,7 +496,17 @@ function TaskDetail({ task, me, onClose, onChanged, onEdit, onStatusChange, onDe
   }
 
   return (
-    <div className="modal-bg" onClick={onClose}>
+    <div
+      className="modal-bg"
+      onClick={(e) => {
+        // Only close when the click landed on the backdrop itself — NOT on anything
+        // bubbling up from inside the modal. This is critical on mobile Safari: when
+        // a file picker closes, the synthetic click event from "Listo" bubbles up
+        // through the input → section → modal-bg and would otherwise close the modal
+        // BEFORE the input's onChange handler fires (the file is lost).
+        if (e.target === e.currentTarget) onClose();
+      }}
+    >
       <div className="modal modal-lg" onClick={(e) => e.stopPropagation()}>
         <div className="task-detail-head">
           <div>
@@ -531,7 +541,6 @@ function TaskDetail({ task, me, onClose, onChanged, onEdit, onStatusChange, onDe
               <input
                 ref={imgInput}
                 type="file"
-                accept="image/*"
                 multiple
                 style={{ display: 'none' }}
                 onClick={(e) => e.stopPropagation()}
@@ -572,7 +581,6 @@ function TaskDetail({ task, me, onClose, onChanged, onEdit, onStatusChange, onDe
               <input
                 ref={vidInput}
                 type="file"
-                accept="video/*"
                 multiple
                 style={{ display: 'none' }}
                 onClick={(e) => e.stopPropagation()}
@@ -861,7 +869,11 @@ function DocPreview({ doc, onClose }) {
   }, [doc.url, cat]);
 
   return (
-    <div className="modal-bg" onClick={onClose} style={{ zIndex: 100 }}>
+    <div
+      className="modal-bg"
+      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+      style={{ zIndex: 100 }}
+    >
       <div className="modal modal-lg" onClick={(e) => e.stopPropagation()} style={{ maxHeight: '90vh' }}>
         <div className="task-detail-head">
           <div>
