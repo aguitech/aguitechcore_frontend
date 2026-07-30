@@ -136,9 +136,16 @@ export default function Landing() {
 
   return (
     <div className="landing">
+      {/* Animated grid backdrop */}
+      <div className="landing-grid" aria-hidden="true" />
+      <div className="landing-glow-orb glow-orb-1" aria-hidden="true" />
+      <div className="landing-glow-orb glow-orb-2" aria-hidden="true" />
+
       <header className="landing-nav">
         <Link to="/public/blog" className="landing-brand">
-          <span className="landing-logo">⚡</span>
+          <span className="landing-logo">
+            <span className="landing-logo-inner">⚡</span>
+          </span>
           <strong>Aguitech</strong> <span>Core</span>
         </Link>
         <nav className="landing-nav-links">
@@ -156,10 +163,14 @@ export default function Landing() {
       {/* Hero */}
       <section className="landing-hero">
         <div className="landing-hero-content">
-          <span className="landing-eyebrow">🚀 Software a la medida · Hecho en México</span>
+          <span className="landing-eyebrow">
+            <span className="landing-eyebrow-dot" />
+            SOFTWARE A LA MEDIDA · HECHO EN MÉXICO
+          </span>
           <h1>
-            Soluciones <span className="landing-accent">digitales</span><br />
-            para tu negocio
+            <span className="landing-hero-line">Soluciones</span>
+            <span className="landing-accent landing-hero-line">digitales</span>
+            <span className="landing-hero-line">para tu negocio</span>
           </h1>
           <p className="landing-sub">
             Apps web, automatizaciones, integraciones con IA y dashboards
@@ -170,18 +181,34 @@ export default function Landing() {
             <Link to="/public/blog" className="landing-cta secondary">📰 Leer el blog</Link>
           </div>
           <div className="landing-trust">
-            <span>👥 +30 clientes</span>
-            <span>·</span>
-            <span>📁 +50 proyectos</span>
-            <span>·</span>
-            <span>✅ +200 tareas completadas</span>
+            <span><strong>+30</strong> clientes</span>
+            <span className="landing-trust-sep">·</span>
+            <span><strong>+50</strong> proyectos</span>
+            <span className="landing-trust-sep">·</span>
+            <span><strong>+200</strong> tareas completadas</span>
           </div>
         </div>
         <div className="landing-hero-art" aria-hidden="true">
-          <div className="landing-art-card">📊 Dashboard en vivo</div>
-          <div className="landing-art-card">💬 Chat en tiempo real</div>
-          <div className="landing-art-card">📅 Citas automatizadas</div>
-          <div className="landing-art-card">📰 Blog público</div>
+          <div className="landing-art-card">
+            <span className="landing-art-icon">📊</span>
+            <span>Dashboard en vivo</span>
+            <span className="landing-art-bar"><span style={{ width: '78%' }} /></span>
+          </div>
+          <div className="landing-art-card">
+            <span className="landing-art-icon">💬</span>
+            <span>Chat en tiempo real</span>
+            <span className="landing-art-pulse" />
+          </div>
+          <div className="landing-art-card">
+            <span className="landing-art-icon">📅</span>
+            <span>Citas automatizadas</span>
+            <span className="landing-art-counter">24/7</span>
+          </div>
+          <div className="landing-art-card">
+            <span className="landing-art-icon">📰</span>
+            <span>Blog público</span>
+            <span className="landing-art-badge">NEW</span>
+          </div>
         </div>
       </section>
 
@@ -226,7 +253,8 @@ export default function Landing() {
       <section className="landing-booking" id="agendar">
         <div className="landing-booking-wrap">
           <div className="landing-booking-head">
-            <h2>📅 Agenda tu cita</h2>
+            <span className="landing-section-eyebrow">RESERVA EN 3 PASOS</span>
+            <h2>Agenda tu cita</h2>
             <p className="muted">
               Elige el día, la hora y el tema. Te confirmamos por correo en menos de 24 h.
             </p>
@@ -389,11 +417,29 @@ export default function Landing() {
       </section>
 
       <footer className="landing-footer">
-        <div>
-          <strong>⚡ Aguittech Core</strong> — hecho con ❤️ en México
-        </div>
-        <div className="muted small">
-          <Link to="/public/blog">Blog</Link> · <Link to="/login">Acceder</Link>
+        <div className="landing-footer-inner">
+          <div className="landing-footer-brand">
+            <span className="landing-logo">
+              <span className="landing-logo-inner">⚡</span>
+            </span>
+            <div>
+              <strong>Aguitech Core</strong>
+              <small>Plataforma de gestión empresarial</small>
+            </div>
+          </div>
+          <div className="landing-footer-links">
+            <Link to="/public/blog">Blog</Link>
+            <Link to="/login">Acceder</Link>
+            <Link to="/register">Registro</Link>
+            <a href="mailto:hector@aguitech.com">Contacto</a>
+          </div>
+          <div className="landing-footer-meta">
+            <span className="landing-footer-status">
+              <span className="landing-footer-pulse" />
+              Sistemas operativos
+            </span>
+            <small>© {new Date().getFullYear()} Aguitech · Hecho con ⚡ en México</small>
+          </div>
         </div>
       </footer>
     </div>

@@ -4,19 +4,19 @@ import { useAuth } from '../context/AuthContext.jsx';
 import NotificationBell from './NotificationBell.jsx';
 
 const NAV_BASE = [
-  { to: '/dashboard', label: 'Dashboard', icon: '📊' },
-  { to: '/clients', label: 'Clientes', icon: '👥' },
-  { to: '/projects', label: 'Proyectos', icon: '📁' },
-  { to: '/tasks', label: 'Tareas', icon: '✅' },
-  { to: '/appointments', label: 'Citas', icon: '📅' },
-  { to: '/calendar', label: 'Calendario', icon: '🗓️' },
-  { to: '/chat', label: 'Chat', icon: '💬' },
-  { to: '/blog', label: 'Blog', icon: '📰' },
+  { to: '/dashboard', label: 'Dashboard', icon: '◆' },
+  { to: '/clients', label: 'Clientes', icon: '◎' },
+  { to: '/projects', label: 'Proyectos', icon: '▣' },
+  { to: '/tasks', label: 'Tareas', icon: '✓' },
+  { to: '/appointments', label: 'Citas', icon: '◷' },
+  { to: '/calendar', label: 'Calendario', icon: '◫' },
+  { to: '/chat', label: 'Chat', icon: '◉' },
+  { to: '/blog', label: 'Blog', icon: '◐' },
 ];
 
 const NAV_ADMIN = [
-  { to: '/users', label: 'Usuarios', icon: '👤' },
-  { to: '/audit-log', label: 'Bitácora', icon: '📋' },
+  { to: '/users', label: 'Usuarios', icon: '◍' },
+  { to: '/audit-log', label: 'Bitácora', icon: '◰' },
 ];
 
 export default function Layout({ children }) {
@@ -24,14 +24,12 @@ export default function Layout({ children }) {
   const navigate = useNavigate();
   const [mobileOpen, setMobileOpen] = useState(false);
 
-  // Close the drawer when the route changes
   useEffect(() => {
     const close = () => setMobileOpen(false);
     window.addEventListener('hashchange', close);
     return () => window.removeEventListener('hashchange', close);
   }, []);
 
-  // Lock body scroll when drawer is open on mobile
   useEffect(() => {
     if (mobileOpen) {
       document.body.style.overflow = 'hidden';
@@ -41,7 +39,6 @@ export default function Layout({ children }) {
     return () => { document.body.style.overflow = ''; };
   }, [mobileOpen]);
 
-  // Close on resize to desktop width
   useEffect(() => {
     const onResize = () => {
       if (window.innerWidth > 860) setMobileOpen(false);
@@ -60,12 +57,12 @@ export default function Layout({ children }) {
   const navItems = [
     ...NAV_BASE,
     ...(user?.role === 'admin' ? NAV_ADMIN : []),
-    { to: '/profile', label: 'Perfil', icon: '⚙️' },
+    { to: '/profile', label: 'Perfil', icon: '◧' },
   ];
 
   return (
     <div className="layout">
-      {/* ============ Mobile hamburger (estilo aguitech.com) ============ */}
+      {/* Mobile hamburger */}
       <button
         type="button"
         className="mobile-hamburger"
@@ -75,14 +72,14 @@ export default function Layout({ children }) {
       >
         <span></span>
         <span></span>
+        <span></span>
       </button>
 
-      {/* ============ Mobile overlay ============ */}
       {mobileOpen && (
         <div className="mobile-overlay" onClick={() => setMobileOpen(false)} />
       )}
 
-      {/* ============ Sidebar (drawer on mobile, fixed on desktop) ============ */}
+      {/* Sidebar */}
       <aside className={`sidebar ${mobileOpen ? 'mobile-open' : ''}`}>
         <button
           type="button"
@@ -93,13 +90,16 @@ export default function Layout({ children }) {
         >×</button>
 
         <div className="brand">
-          <span className="logo">⚡</span>
-          <div>
+          <div className="brand-mark">
+            <span className="brand-mark-inner">⚡</span>
+          </div>
+          <div className="brand-text">
             <strong>Aguitech</strong>
             <small>Core</small>
           </div>
         </div>
-        <nav>
+
+        <nav className="sidebar-nav">
           {navItems.map((n) => (
             <NavLink
               key={n.to}
@@ -108,10 +108,12 @@ export default function Layout({ children }) {
               onClick={() => setMobileOpen(false)}
             >
               <span className="nav-icon">{n.icon}</span>
-              <span>{n.label}</span>
+              <span className="nav-label">{n.label}</span>
+              <span className="nav-glow" aria-hidden="true" />
             </NavLink>
           ))}
         </nav>
+
         <div className="sidebar-foot">
           <div className="user-card">
             <div className="avatar">{user?.name?.[0]?.toUpperCase() || '?'}</div>
@@ -125,7 +127,6 @@ export default function Layout({ children }) {
       </aside>
 
       <main className="main">
-        {/* Top bar with notification bell */}
         <div className="topbar">
           <div className="topbar-spacer" />
           <NotificationBell />
