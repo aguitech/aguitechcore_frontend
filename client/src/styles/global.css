@@ -552,7 +552,8 @@ textarea { resize: vertical; font-family: inherit; }
 code { background: var(--bg-2); padding: 1px 6px; border-radius: 4px; font-size: 0.85em; }
 
 /* === Modal === */
-.modal-bg {
+.modal-bg,
+.modal-backdrop {
   position: fixed; inset: 0; background: rgba(0,0,0,0.6);
   display: flex; align-items: center; justify-content: center;
   z-index: 100; padding: 1rem;
@@ -1221,7 +1222,7 @@ code { background: var(--bg-2); padding: 1px 6px; border-radius: 4px; font-size:
     padding: 1rem !important;
     margin: 1vh auto !important;
   }
-  .modal-bg { padding: 0.5rem; }
+  .modal-bg, .modal-backdrop { padding: 0.5rem; }
   .modal h2, .modal h3 { font-size: 1.1rem; }
   .modal .row-actions { flex-wrap: wrap; }
 }
