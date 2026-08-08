@@ -68,10 +68,11 @@ export default function Login() {
         <div className="auth-brand">
           <img
             src="/img/logo.png"
-            alt=""
+            alt="Aguitech"
             className="auth-logo"
             draggable="false"
           />
+          <h1 className="auth-title">Aguitech</h1>
         </div>
         <p className="muted auth-tagline">Inicia sesión para continuar</p>
 
