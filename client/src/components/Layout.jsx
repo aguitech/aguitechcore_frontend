@@ -8,6 +8,7 @@ const NAV_BASE = [
   { to: '/clients', label: 'Clientes', icon: '◎' },
   { to: '/projects', label: 'Proyectos', icon: '▣' },
   { to: '/tasks', label: 'Tareas', icon: '✓' },
+  { to: '/incidents', label: 'Incidencias', icon: '🚨' },
   { to: '/appointments', label: 'Citas', icon: '◷' },
   { to: '/calendar', label: 'Calendario', icon: '◫' },
   { to: '/chat', label: 'Chat', icon: '◉' },

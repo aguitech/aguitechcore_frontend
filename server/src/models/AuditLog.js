@@ -16,6 +16,8 @@ const auditLogSchema = new mongoose.Schema(
     //   'client.create'      'client.update'       'client.delete'
     //   'project.create'     'project.update'      'project.delete'
     //   'task.create'        'task.update'         'task.delete'         'task.assign'        'task.status_change'
+    //   'incident.create'    'incident.update'     'incident.delete'     'incident.assign'    'incident.status_change'
+    //   'incident.{image,video,document}.add'
     //   'blog.post.create'   'blog.post.update'    'blog.post.delete'    'blog.post.publish'
     //   'blog.category.*'
     //   'chat.message'       'chat.conversation.create'
@@ -26,7 +28,7 @@ const auditLogSchema = new mongoose.Schema(
 
     category: {
       type: String,
-      enum: ['auth', 'user', 'client', 'project', 'task', 'blog', 'chat', 'apikey', 'file', 'appointment', 'admin', 'system'],
+      enum: ['auth', 'user', 'client', 'project', 'task', 'incident', 'blog', 'chat', 'apikey', 'file', 'appointment', 'admin', 'system'],
       required: true,
       index: true,
     },

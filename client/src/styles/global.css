@@ -2130,3 +2130,154 @@ pre.body {
 
 /* Keep the existing .card form layout breathing room. */
 .auth-wrap .card { padding: 2rem; }
+
+/* =============================================================
+   INCIDENTS — kanban view, SLA badges, cards
+   Mirrors the kanban aesthetic of Tasks but with red/urgency palette.
+   ============================================================= */
+
+.incident-kanban {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 0.75rem;
+  align-items: start;
+}
+.incident-col {
+  background: var(--bg-2, #181818);
+  border-radius: 8px;
+  padding: 0;
+  min-height: 200px;
+  border: 1px solid var(--border, #2a2a2a);
+}
+.incident-col-head {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 0.6rem 0.75rem; border-bottom: 1px solid var(--border, #2a2a2a);
+  background: var(--bg, #0f0f0f);
+  border-radius: 8px 8px 0 0;
+}
+.incident-col-body {
+  padding: 0.6rem;
+  display: flex; flex-direction: column; gap: 0.6rem;
+}
+
+.incident-card {
+  background: var(--bg, #0f0f0f);
+  border: 1px solid var(--border, #2a2a2a);
+  border-left-width: 4px;
+  border-radius: 6px;
+  padding: 0.6rem;
+  cursor: pointer;
+  transition: transform 0.1s ease, border-color 0.1s ease;
+}
+.incident-card:hover {
+  transform: translateY(-1px);
+  border-color: var(--accent, #FF6A00);
+}
+.incident-card-head {
+  display: flex; justify-content: space-between; align-items: start; gap: 6px;
+}
+.incident-card-head strong { font-size: 0.92rem; line-height: 1.25; }
+.incident-card-desc {
+  font-size: 0.82rem; color: rgba(255,255,255,0.7);
+  margin: 6px 0 0;
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.incident-card-foot {
+  display: flex; justify-content: space-between; align-items: center;
+  margin-top: 6px;
+}
+.incident-card-actions {
+  display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px;
+}
+
+/* SLA badges — red/urgency palette */
+.sla-badge {
+  display: inline-block;
+  font-size: 0.7rem;
+  font-weight: 600;
+  padding: 2px 6px;
+  border-radius: 4px;
+  letter-spacing: 0.02em;
+}
+.sla-breached {
+  background: rgba(239,68,68,0.18);
+  color: #ef4444;
+  border: 1px solid rgba(239,68,68,0.35);
+  animation: slaPulse 2s ease-in-out infinite;
+}
+.sla-response-overdue {
+  background: rgba(249,115,22,0.18);
+  color: #f97316;
+  border: 1px solid rgba(249,115,22,0.35);
+}
+.sla-urgent {
+  background: rgba(234,179,8,0.18);
+  color: #eab308;
+  border: 1px solid rgba(234,179,8,0.35);
+}
+.sla-warning {
+  background: rgba(255,255,255,0.06);
+  color: rgba(255,255,255,0.7);
+}
+@keyframes slaPulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.6; }
+}
+
+/* Severity badge (matches the badge class but with severity colors) */
+.badge { padding: 2px 8px; border-radius: 999px; font-size: 0.75rem; color: #fff; font-weight: 700; }
+
+/* Meta grid in detail modal */
+.incident-meta-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 0.75rem;
+  padding: 0.75rem;
+  background: var(--bg-2, #181818);
+  border: 1px solid var(--border, #2a2a2a);
+  border-radius: 6px;
+}
+.incident-meta-grid > div {
+  display: flex; flex-direction: column; gap: 2px;
+}
+.incident-meta-grid strong { font-size: 0.95rem; }
+
+/* Comment + file rows in detail modal */
+.comment-row {
+  border-left: 2px solid var(--accent, #FF6A00);
+  padding: 0.5rem 0.75rem;
+  margin: 0.4rem 0;
+  background: rgba(255,255,255,0.02);
+  border-radius: 0 4px 4px 0;
+}
+.comment-row p { margin: 0.25rem 0; font-size: 0.92rem; }
+.file-row {
+  display: flex; align-items: center; gap: 8px;
+  padding: 4px 6px; border-radius: 4px;
+  font-size: 0.85rem;
+}
+.file-row:hover { background: rgba(255,255,255,0.04); }
+.file-row a { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.file-row .muted.xs { flex: 0 0 auto; }
+
+/* Tiny buttons (used in card actions) */
+.btn.xs, button.ghost.xs, button.primary.xs {
+  font-size: 0.7rem; padding: 2px 6px; line-height: 1.2;
+}
+.muted.xs { font-size: 0.72rem; }
+
+/* Mobile: kanban becomes horizontal scroll instead of grid */
+@media (max-width: 900px) {
+  .incident-kanban {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+@media (max-width: 600px) {
+  .incident-kanban {
+    grid-template-columns: 1fr;
+  }
+  .incident-meta-grid {
+    grid-template-columns: 1fr;
+  }
+}

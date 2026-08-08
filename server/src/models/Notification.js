@@ -18,6 +18,9 @@ const notificationSchema = new mongoose.Schema(
         'task.assigned',        // I was assigned a task
         'task.status_changed',  // someone changed status of a task I own/watch
         'task.commented',       // someone commented on my task
+        'incident.assigned',    // I was assigned an incident
+        'incident.status_changed', // someone changed status of an incident I own/watch
+        'incident.commented',   // someone commented on my incident
         'blog.comment',         // someone commented on my blog post
         'blog.published',       // a post I authored was published
         'appointment.created',  // someone booked an appointment with me

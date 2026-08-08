@@ -9,6 +9,7 @@ import Projects from './pages/Projects.jsx';
 import ProjectDetail from './pages/ProjectDetail.jsx';
 import Users from './pages/Users.jsx';
 import Tasks from './pages/Tasks.jsx';
+import Incidents from './pages/Incidents.jsx';
 import Calendar from './pages/Calendar.jsx';
 import Profile from './pages/Profile.jsx';
 import Chat from './pages/Chat.jsx';
@@ -61,6 +62,7 @@ export default function App() {
         <Route path="/proyectos/:id" element={<PrivateRoute><ProjectDetail /></PrivateRoute>} />
         <Route path="/users" element={<PrivateRoute><Users /></PrivateRoute>} />
         <Route path="/tasks" element={<PrivateRoute><Tasks /></PrivateRoute>} />
+        <Route path="/incidents" element={<PrivateRoute><Incidents /></PrivateRoute>} />
         <Route path="/calendar" element={<PrivateRoute><Calendar /></PrivateRoute>} />
         <Route path="/chat" element={<PrivateRoute><Chat /></PrivateRoute>} />
         <Route path="/profile" element={<PrivateRoute><Profile /></PrivateRoute>} />
