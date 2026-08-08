@@ -136,6 +136,120 @@ router.post('/public', async (req, res, next) => {
 // ====== AUTHENTICATED ROUTES (admin / members) ======
 router.use(requireAuth);
 
+// POST /api/appointments — create an appointment manually (admin/staff).
+// Mirrors the public endpoint but:
+//   - requires auth (req.user available)
+//   - allows linking customerUser to a registered user by email
+//   - sets source: 'manual'
+//   - audit actor is the logged-in admin
+//   - notifies the assigned staff member
+router.post('/', async (req, res, next) => {
+  try {
+    const { customerName, customerEmail, customerPhone, assignedTo, startsAt, endsAt, subject, description, location, customerUser } = req.body || {};
+    if (!customerName || !customerName.trim()) return res.status(400).json({ msg: 'Nombre requerido' });
+    if (!subject || !subject.trim()) return res.status(400).json({ msg: 'Asunto requerido' });
+    if (!startsAt || !endsAt) return res.status(400).json({ msg: 'Horario requerido' });
+    const s = new Date(startsAt);
+    const e = new Date(endsAt);
+    if (isNaN(s.getTime()) || isNaN(e.getTime())) return res.status(400).json({ msg: 'Horario inválido' });
+    if (e <= s) return res.status(400).json({ msg: 'La hora de fin debe ser posterior' });
+
+    let assigneeDoc = null;
+    if (assignedTo) {
+      if (!mongoose.isValidObjectId(assignedTo)) return res.status(400).json({ msg: 'Asignado inválido' });
+      assigneeDoc = await User.findById(assignedTo).select('name email role active');
+      if (!assigneeDoc) return res.status(400).json({ msg: 'Asignado no existe' });
+      if (assigneeDoc.active === false) return res.status(400).json({ msg: 'Ese miembro no está disponible' });
+    }
+
+    // Optional: link the appointment to a registered user (if email matches).
+    let linkedUserId = null;
+    if (customerUser && mongoose.isValidObjectId(customerUser)) {
+      linkedUserId = customerUser;
+    } else if (customerEmail && customerEmail.trim()) {
+      const u = await User.findOne({ email: customerEmail.trim().toLowerCase() }).select('_id');
+      if (u) linkedUserId = u._id;
+    }
+
+    // Overlap check (same logic as public route).
+    const overlap = await Appointment.findOne({
+      assignedTo: assigneeDoc?._id || null,
+      status: { $in: ['scheduled', 'confirmed'] },
+      $and: [
+        { startsAt: { $lt: e } },
+        { endsAt: { $gt: s } },
+      ],
+    });
+    if (overlap) {
+      return res.status(409).json({ msg: 'Ese horario ya está ocupado. Por favor elige otro.' });
+    }
+
+    const appt = await Appointment.create({
+      customerName: customerName.trim(),
+      customerEmail: (customerEmail || '').trim().toLowerCase(),
+      customerPhone: (customerPhone || '').trim(),
+      customerUser: linkedUserId,
+      assignedTo: assigneeDoc?._id || null,
+      assignedToName: assigneeDoc?.name || '',
+      startsAt: s,
+      endsAt: e,
+      subject: subject.trim(),
+      description: (description || '').trim(),
+      location: (location || '').trim(),
+      status: 'scheduled',
+      source: 'manual',
+    });
+
+    // Notify the assigned staff member.
+    if (assigneeDoc && String(assigneeDoc._id) !== String(req.user._id)) {
+      const when = s.toLocaleString('es-MX', { dateStyle: 'full', timeStyle: 'short' });
+      notify({
+        recipient: assigneeDoc._id,
+        type: 'appointment.created',
+        title: `📅 Nueva cita: ${appt.customerName}`,
+        body: `${appt.subject} — ${when}`,
+        link: '/appointments',
+        sourceType: 'Appointment',
+        sourceId: String(appt._id),
+        meta: { customerName: appt.customerName, startsAt: appt.startsAt },
+        actor: req.user._id,
+        actorName: req.user.name,
+      });
+    }
+
+    // If customer is a registered user, notify them too.
+    if (linkedUserId && String(linkedUserId) !== String(req.user._id)) {
+      notify({
+        recipient: linkedUserId,
+        type: 'appointment.created',
+        title: `📅 Tienes una cita: ${appt.subject}`,
+        body: `${new Date(appt.startsAt).toLocaleString('es-MX')}`,
+        link: '/my-appointments',
+        sourceType: 'Appointment',
+        sourceId: String(appt._id),
+      });
+    }
+
+    // Audit.
+    audit({
+      req,
+      action: 'appointment.create',
+      category: 'appointment',
+      targetType: 'Appointment',
+      targetId: appt._id,
+      targetLabel: `${appt.customerName} → ${assigneeDoc?.name || 'sin asignar'} · ${appt.subject}`,
+      meta: { source: 'manual' },
+    });
+
+    const populated = await Appointment.findById(appt._id)
+      .populate('assignedTo', 'name email role')
+      .populate('customerUser', 'name email')
+      .lean();
+
+    res.status(201).json(populated);
+  } catch (err) { next(err); }
+});
+
 // GET /api/appointments — list with filters
 router.get('/', async (req, res, next) => {
   try {
