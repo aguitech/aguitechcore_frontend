@@ -51,6 +51,17 @@ export default function Login() {
     }
   }
 
+  // Clear the error as soon as the user starts editing either field —
+  // feels natural and avoids the stale alert haunting the form.
+  function onChangeEmail(e) {
+    if (error) setError('');
+    setEmail(e.target.value);
+  }
+  function onChangePassword(e) {
+    if (error) setError('');
+    setPassword(e.target.value);
+  }
+
   return (
     <div className="auth-wrap">
       <form className="card" onSubmit={onSubmit} autoComplete="on" noValidate>
@@ -71,7 +82,7 @@ export default function Login() {
           <input
             type="email"
             value={email}
-            onChange={(e) => setEmail(e.target.value)}
+            onChange={onChangeEmail}
             placeholder="tu@email.com"
             autoComplete="email"
             spellCheck="false"
@@ -83,7 +94,7 @@ export default function Login() {
           <input
             type="password"
             value={password}
-            onChange={(e) => setPassword(e.target.value)}
+            onChange={onChangePassword}
             placeholder="••••••••"
             autoComplete="current-password"
             required
