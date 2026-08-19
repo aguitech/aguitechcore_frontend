@@ -1,6 +1,7 @@
 import Project from '../models/Project.js';
 import Client from '../models/Client.js';
 import User from '../models/User.js';
+import { isSuperUser } from '../lib/superuser.js';
 import Task from '../models/Task.js';
 
 function buildProjectPayload(body) {
@@ -43,13 +44,18 @@ export async function getStats(req, res, next) {
 
 export async function listProjects(req, res, next) {
   try {
-    // Show projects where user is owner OR member
-    const projects = await Project.find({
-      $or: [
-        { owner: req.user._id },
-        { 'members.user': req.user._id },
-      ],
-    })
+    // Admins/staff see ALL projects; regular users only see their own + projects they're a member of.
+    // Without the bypass, an admin who is NOT the owner/member of a project sees nothing → looks
+    // like data was "lost" when in reality the filter hides everything from superusers.
+    const filter = isSuperUser(req.user)
+      ? {}
+      : {
+          $or: [
+            { owner: req.user._id },
+            { 'members.user': req.user._id },
+          ],
+        };
+    const projects = await Project.find(filter)
       .populate('client', 'name company email status')
       .populate('members.user', 'name email role')
       .sort({ createdAt: -1 });
@@ -59,14 +65,17 @@ export async function listProjects(req, res, next) {
 
 export async function getProject(req, res, next) {
   try {
-    // Show project if user is owner OR member
-    const project = await Project.findOne({
-      _id: req.params.id,
-      $or: [
-        { owner: req.user._id },
-        { 'members.user': req.user._id },
-      ],
-    })
+    // Admins/staff can read any project; users only their own / member projects.
+    const filter = isSuperUser(req.user)
+      ? { _id: req.params.id }
+      : {
+          _id: req.params.id,
+          $or: [
+            { owner: req.user._id },
+            { 'members.user': req.user._id },
+          ],
+        };
+    const project = await Project.findOne(filter)
       .populate('client', 'name company email status')
       .populate('members.user', 'name email role');
     if (!project) return res.status(404).json({ message: 'Proyecto no encontrado' });

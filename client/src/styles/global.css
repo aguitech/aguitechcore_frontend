@@ -554,18 +554,68 @@ code { background: var(--bg-2); padding: 1px 6px; border-radius: 4px; font-size:
 /* === Modal === */
 .modal-bg,
 .modal-backdrop {
-  position: fixed; inset: 0; background: rgba(0,0,0,0.6);
+  position: fixed; inset: 0;
+  background: rgba(0, 4, 15, 0.85);
+  -webkit-backdrop-filter: blur(4px);
+  backdrop-filter: blur(4px);
   display: flex; align-items: center; justify-content: center;
   z-index: 100; padding: 1rem;
 }
 .modal {
-  background: var(--card); border: 1px solid var(--border);
-  border-radius: 10px; padding: 1.5rem; max-width: 600px; width: 100%;
+  background: var(--bg-2);
+  border: 1px solid var(--border-strong);
+  border-radius: 12px;
+  padding: 1.75rem;
+  max-width: 600px; width: 100%;
   max-height: 90vh; overflow-y: auto;
+  color: var(--text);
+  box-shadow: var(--shadow-lg), var(--glow-accent);
+  position: relative;
 }
+.modal::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: linear-gradient(135deg, rgba(0,229,255,0.05), transparent 60%);
+  pointer-events: none;
+}
+.modal > * { position: relative; z-index: 1; }
 .modal.small { max-width: 400px; }
-.modal h3 { margin: 0 0 1rem; }
-.modal-actions { display: flex; justify-content: flex-end; gap: 0.5rem; margin-top: 1rem; }
+.modal h2, .modal h3 { margin: 0 0 1rem; color: var(--text-strong); }
+.modal label {
+  display: block;
+  margin-bottom: 0.35rem;
+  color: var(--text);
+  font-weight: 500;
+}
+.modal input,
+.modal select,
+.modal textarea {
+  background: var(--bg-3);
+  border: 1px solid var(--border);
+  color: var(--text-strong);
+  width: 100%;
+  padding: 0.6rem 0.75rem;
+  border-radius: 6px;
+  font-family: inherit;
+  font-size: 0.95rem;
+  line-height: 1.4;
+}
+.modal input:focus,
+.modal select:focus,
+.modal textarea:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px var(--accent-glow);
+}
+.modal input::placeholder,
+.modal textarea::placeholder {
+  color: var(--muted-2);
+}
+.modal-actions { display: flex; justify-content: flex-end; gap: 0.5rem; margin-top: 1.25rem; padding-top: 1rem; border-top: 1px solid var(--border); }
+.modal .row { margin-bottom: 0.85rem; }
+.modal .row label { font-size: 0.9rem; }
 
 /* === Kanban === */
 .kanban { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem; }
@@ -1789,6 +1839,22 @@ code { background: var(--bg-2); padding: 1px 6px; border-radius: 4px; font-size:
 /* ============ modal size variants ============ */
 .modal.xlarge { max-width: 1000px; width: 95vw; max-height: 92vh; overflow-y: auto; }
 .modal.large  { max-width: 720px;  width: 92vw; max-height: 92vh; overflow-y: auto; }
+
+/* === Tablets & small laptops: 860-1024px ===
+   Sin este breakpoint, .modal.large (720px) y .modal.xlarge (1000px) se
+   quedan fijos a tamaño desktop mientras la pantalla es apenas más angosta
+   (ej. 959px) → el modal se desborda y se "encima" el contenido de la
+   página. Forzamos 95vw con padding reducido. */
+@media (max-width: 1024px) and (min-width: 861px) {
+  .modal.large,
+  .modal.xlarge {
+    width: 92vw !important;
+    max-width: 92vw !important;
+    max-height: 90vh !important;
+    padding: 1.25rem !important;
+  }
+  .modal-bg, .modal-backdrop { padding: 0.75rem; }
+}
 
 /* ============ body preview (long text) ============ */
 pre.body {
