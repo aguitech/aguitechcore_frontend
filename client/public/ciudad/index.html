@@ -793,6 +793,8 @@ function escapeHtml(s) {
 function addChat({ name, text, color, role, system }) {
   const box = $('chat-box'); box.style.display = 'block';
   $('chat-input-row').style.display = 'flex';
+  // Si system es string, ese es el texto del sistema
+  if (typeof system === 'string') text = system;
   // Empty state hint si está vacío
   if (box.children.length === 0 && !system) {
     const hint = document.createElement('div');
@@ -806,7 +808,7 @@ function addChat({ name, text, color, role, system }) {
     if (hint && hint.children.length === 1 && box.children.length === 1) hint.remove();
     const div = document.createElement('div');
     div.className = 'chat-msg';
-    div.innerHTML = `<span style="color:${color}">· ${escapeHtml(text)}</span>`;
+    div.innerHTML = `<span style="color:${color}">· ${escapeHtml(text || '')}</span>`;
     box.appendChild(div);
   } else {
     // Remove hint on first user message
