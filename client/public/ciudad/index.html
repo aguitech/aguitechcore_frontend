@@ -16,19 +16,20 @@
   * { margin: 0; padding: 0; box-sizing: border-box; }
   body { margin: 0; overflow: hidden; font-family: monospace; background: #000; }
 
-  /* ====== LOGIN PANEL — top-right corner, NEVER blocks gameplay ====== */
+  /* ====== LOGIN PANEL — bottom-left, NEVER blocks gameplay ====== */
   html, body { margin: 0; padding: 0; }
   #login-bg {
     position: fixed !important;
-    top: 20px !important; right: 20px !important;
+    left: 20px !important;
+    bottom: 110px !important;     /* above the controls panel */
     width: 280px !important;
-    background: rgba(2, 4, 15, 0.95) !important;
+    background: rgba(2, 4, 15, 0.92) !important;
     backdrop-filter: blur(12px) !important;
     border: 1px solid #00d4ff66 !important;
-    border-radius: 12px !important;
-    padding: 14px 16px !important;
+    border-radius: 10px !important;
+    padding: 12px 14px !important;
     color: #00d4ff !important;
-    box-shadow: 0 0 30px rgba(0,212,255,0.25) !important;
+    box-shadow: 0 0 24px rgba(0,212,255,0.2) !important;
     z-index: 2147483647 !important;
     pointer-events: auto !important;
     visibility: visible !important;
@@ -38,28 +39,64 @@
   a-scene, .a-canvas, canvas.a-canvas, a-entity, a-camera {
     z-index: 0 !important;
   }
-  /* Hide panel once authenticated */
-  body.ciudad-ready #login-bg {
-    display: none !important;
-    visibility: hidden !important;
-  }
-  #login-box h1 { color: #00d4ff; font-size: 13px; margin-bottom: 8px; letter-spacing: 1px; }
+  /* The bottom-left panel shows different content depending on auth state */
+  #login-box h1 { color: #00d4ff; font-size: 12px; margin-bottom: 8px; letter-spacing: 1px; }
   #login-box p  { color: #aac; font-size: 10px; margin-bottom: 10px; line-height: 1.3; }
   #login-box input {
-    width: 100%; padding: 8px 10px; margin-bottom: 8px;
+    width: 100%; padding: 7px 9px; margin-bottom: 7px;
     background: #06080f; border: 1px solid #00d4ff44; color: #00d4ff;
-    border-radius: 6px; font-family: monospace; font-size: 12px;
+    border-radius: 5px; font-family: monospace; font-size: 12px;
     box-sizing: border-box;
   }
   #login-box input:focus { outline: none; border-color: #00d4ff; }
   #login-box button {
-    width: 100%; padding: 9px; background: #00d4ff; color: #000;
-    border: 0; border-radius: 6px; font-weight: 700; cursor: pointer;
-    font-family: monospace; letter-spacing: 1px; font-size: 12px;
+    width: 100%; padding: 8px; background: #00d4ff; color: #000;
+    border: 0; border-radius: 5px; font-weight: 700; cursor: pointer;
+    font-family: monospace; letter-spacing: 1px; font-size: 11px;
   }
   #login-box button:hover { background: #00ffff; }
-  #login-error { color: #ff3838; font-size: 10px; margin-top: 6px; min-height: 14px; }
-  #login-status { color: #888; font-size: 10px; margin-top: 8px; }
+  #login-error { color: #ff3838; font-size: 10px; margin-top: 5px; min-height: 12px; }
+  #login-status { color: #888; font-size: 9px; margin-top: 6px; }
+
+  /* Authenticated pill (always visible after login) */
+  #user-pill {
+    position: fixed !important;
+    left: 20px !important;
+    bottom: 110px !important;     /* same spot as login-bg */
+    display: none;                /* hidden by default */
+    align-items: center;
+    gap: 10px;
+    padding: 10px 14px !important;
+    background: rgba(2, 4, 15, 0.92) !important;
+    backdrop-filter: blur(12px) !important;
+    border: 1px solid #00d4ff66 !important;
+    border-radius: 999px !important;     /* pill shape */
+    color: #00d4ff !important;
+    font-family: monospace;
+    font-size: 12px;
+    z-index: 2147483647 !important;
+    box-shadow: 0 0 18px rgba(0,212,255,0.25) !important;
+  }
+  #user-pill.visible { display: inline-flex !important; }
+  #user-pill .avatar {
+    width: 28px; height: 28px; border-radius: 50%;
+    display: inline-block;
+    box-shadow: 0 0 10px currentColor;
+  }
+  #user-pill .name { color: #fff; font-weight: 700; max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  #user-pill .role { color: #888; font-size: 9px; text-transform: uppercase; }
+  #user-pill .logout-btn {
+    background: transparent;
+    color: #ff3838;
+    border: 1px solid #ff383866;
+    border-radius: 999px;
+    padding: 4px 10px;
+    font-family: monospace;
+    font-size: 10px;
+    cursor: pointer;
+    letter-spacing: 1px;
+  }
+  #user-pill .logout-btn:hover { background: #ff383822; }
 
   /* ====== HUD ====== */
   .controls-panel {
@@ -142,7 +179,7 @@
 
 <body>
 
-<!-- ============== LOGIN PANEL (top-right corner, non-blocking) ============== -->
+<!-- ============== LOGIN PANEL (bottom-left, non-blocking) ============== -->
 <div id="login-bg">
   <div id="login-box">
     <h1>🔐 INICIAR SESIÓN</h1>
@@ -150,8 +187,18 @@
     <input id="login-password" type="password" placeholder="contraseña" autocomplete="current-password" />
     <button id="login-btn">ENTRAR</button>
     <div id="login-error"></div>
-    <div id="login-status">Para entrar al mundo multijugador</div>
+    <div id="login-status">Para aparecer en el mundo multijugador</div>
   </div>
+</div>
+
+<!-- ============== AUTHENTICATED USER PILL (always visible after login) ============== -->
+<div id="user-pill">
+  <span class="avatar" id="userPillAvatar"></span>
+  <span>
+    <div class="name" id="userPillName">—</div>
+    <div class="role" id="userPillRole">—</div>
+  </span>
+  <button class="logout-btn" id="logoutBtnPill">⏻ SALIR</button>
 </div>
 
 <!-- ============== HUD ============== -->
@@ -159,7 +206,6 @@
   <span class="conn-dot" id="connDot"></span>
   <span id="connText">DESCONECTADO</span><br>
   🎬 <span id="currentAnim">CARGANDO...</span>
-  <br><button id="logoutBtn" style="margin-top:8px;background:#0a0e1a;color:#ff3838;border:1px solid #ff383844;padding:4px 10px;border-radius:5px;font-family:monospace;font-size:10px;cursor:pointer;">⏻ SALIR</button>
 </div>
 
 <div class="hud-info">
@@ -246,11 +292,11 @@
 
 <!-- ============== ENSURE LOGIN PANEL VISIBLE (before any module loads) ============== -->
 <script>
-  // Ensure login panel is visible and in top-right corner; clear any prior ciudad-ready
+  // Ensure login panel is visible at bottom-left; clear any prior ciudad-ready
   (function ensureLoginPanel() {
     var bg = document.getElementById('login-bg');
     if (!bg) return;
-    bg.style.cssText = 'position:fixed!important;top:20px!important;right:20px!important;width:280px!important;z-index:2147483647!important;visibility:visible!important;opacity:1!important;pointer-events:auto!important;';
+    bg.style.cssText = 'position:fixed!important;left:20px!important;bottom:110px!important;width:280px!important;z-index:2147483647!important;visibility:visible!important;opacity:1!important;pointer-events:auto!important;';
     document.body && (document.body.className = document.body.className.replace('ciudad-ready','').trim());
   })();
 </script>
@@ -706,11 +752,31 @@ window.addEventListener('load', async () => {
   setInputs();
   requestAnimationFrame(gameLoop);
 
-  const { token } = await ensureAuth();
+  const { token, user } = await ensureAuth();
   document.body.classList.add('ciudad-ready');
-  // Remove the nuclear inline style so the CSS class selector (body.ciudad-ready #login-bg{display:none!important}) takes effect
+
+  // Hide the login panel cleanly
   var lb = document.getElementById('login-bg');
-  if (lb) lb.style.cssText = '';
+  if (lb) { lb.style.cssText = 'display:none!important;visibility:hidden!important;'; }
+
+  // Show the authenticated user pill with the real name + role
+  var pill = document.getElementById('user-pill');
+  var pillName = document.getElementById('userPillName');
+  var pillRole = document.getElementById('userPillRole');
+  var pillAvatar = document.getElementById('userPillAvatar');
+  if (pill && pillName) {
+    pillName.textContent = (user && (user.name || user.email)) || 'Tú';
+    if (pillRole) pillRole.textContent = (user && user.role) || 'guest';
+    if (pillAvatar) {
+      // Hash user email to a vibrant color so each user gets a unique avatar tint
+      var seed = ((user && user.email) || 'anon').split('').reduce(function(a,c){a=((a<<5)-a)+c.charCodeAt(0);return a&a;},0);
+      var hue = Math.abs(seed) % 360;
+      pillAvatar.style.background = 'hsl(' + hue + ',80%,55%)';
+      pillAvatar.style.color = 'hsl(' + hue + ',80%,55%)';
+    }
+    pill.classList.add('visible');
+  }
+
   client = new CiudadClient(token);
   client.connect();
 
@@ -722,8 +788,8 @@ window.addEventListener('load', async () => {
     }
   }, 5000);
 
-  // Logout button: clear session and reload to show the login form
-  var lbBtn = document.getElementById('logoutBtn');
+  // Logout button (in the user pill): clear session and reload to show the login form
+  var lbBtn = document.getElementById('logoutBtnPill');
   if (lbBtn) lbBtn.onclick = function() {
     clearSession();
     location.reload();
