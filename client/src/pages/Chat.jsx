@@ -1,4 +1,5 @@
 import { useEffect, useState, useRef, useCallback } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import Layout from '../components/Layout.jsx';
 import api from '../services/api.js';
 import { useAuth } from '../context/AuthContext.jsx';
@@ -241,7 +242,8 @@ function StagedFileChip({ file, onRemove }) {
 export default function Chat() {
   const { user: currentUser } = useAuth();
   const [conversations, setConversations] = useState([]);
-  const [activeId, setActiveId] = useState(null);
+  const [searchParams] = useSearchParams();
+  const [activeId, setActiveId] = useState(() => searchParams.get('cid') || null);
   const [messages, setMessages] = useState([]);
   const [hasMore, setHasMore] = useState(false);
   const [nextCursor, setNextCursor] = useState(null);
