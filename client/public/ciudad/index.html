@@ -14,9 +14,25 @@
 
   /* ====== LOGIN OVERLAY ====== */
   #login-bg {
-    position: fixed; inset: 0; background: rgba(0,0,0,0.92);
+    position: fixed; inset: 0; background: rgba(0,0,0,0.97);
     display: flex; align-items: center; justify-content: center;
-    z-index: 10000; backdrop-filter: blur(10px);
+    z-index: 100000; backdrop-filter: blur(14px);
+  }
+  /* Hide the 3D scene until the user logs in */
+  a-scene, .a-canvas, canvas.a-canvas {
+    z-index: 1 !important;
+  }
+  body.ciudad-ready a-scene,
+  body.ciudad-ready .a-canvas,
+  body.ciudad-ready canvas.a-canvas {
+    z-index: 1 !important;
+    opacity: 1;
+  }
+  body:not(.ciudad-ready) a-scene,
+  body:not(.ciudad-ready) .a-canvas,
+  body:not(.ciudad-ready) canvas.a-canvas {
+    visibility: hidden !important;
+    opacity: 0 !important;
   }
   #login-box {
     background: #0a0e1a; border: 1px solid #00d4ff; border-radius: 14px;
@@ -639,6 +655,7 @@ window.addEventListener('load', async () => {
 
   const { token } = await ensureAuth();
   loginBg.style.display = 'none';
+  document.body.classList.add('ciudad-ready');
   client = new CiudadClient(token);
   client.connect();
 });
