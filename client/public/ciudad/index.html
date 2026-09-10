@@ -362,6 +362,11 @@
 <!-- ============== A-FRAME SCENE ============== -->
 <a-scene background="color:#82c8e5" stats="false" renderer="antialias:true; alpha:false" network>
 
+  <!-- ====== ASSETS (GLB models) ====== -->
+  <a-assets>
+    <a-asset-item id="plaza2Model" src="https://aguitech.com/3d/ciudad/city/plaza2.glb"></a-asset-item>
+  </a-assets>
+
   <a-entity light="type:ambient; intensity:0.6"></a-entity>
   <a-entity light="type:directional; intensity:1.2" position="5 10 3"></a-entity>
   <a-entity light="type:point; intensity:0.8" position="0 3 0" color="#ffaa66"></a-entity>
@@ -388,6 +393,26 @@
 
     <!-- Vertical billboard / video screen (will show your video if uploaded) -->
     <a-box position="10 4 0" width="4" height="8" depth="0.5" color="#111"></a-box>
+
+    <!-- ====== PLAZA 3D (GLB asset) ====== -->
+    <!-- plaza2.glb cargado en el centro de la ciudad (spawn del player) -->
+    <a-entity id="plaza"
+              gltf-model="#plaza2Model"
+              position="0 0 -25"
+              rotation="0 0 0"
+              scale="1 1 1"
+              shadow="cast:true; receive:true"
+              data-model-loaded="false">
+      <!-- Spinning indicator mientras carga -->
+      <a-entity id="plaza-loader"
+                geometry="primitive:torus; radius:1.2; tube:0.05; segments:32"
+                material="color:#00d4ff; emissive:#00d4ff; emissiveIntensity:0.6; metalness:0.3"
+                position="0 3 0"
+                animation="property:rotation.y; to:360; dur:2000; loop:true; easing:linear">
+      </a-entity>
+      <a-text value="🏛️ Cargando plaza2.glb..."
+              position="0 2 0" align="center" color="#00d4ff" width="6"></a-text>
+    </a-entity>
   </a-entity>
 
   <!-- ====== CAMERA RIG ====== -->
@@ -1080,6 +1105,36 @@ let client = null;
 window.addEventListener('load', async () => {
   setInputs();
   requestAnimationFrame(gameLoop);
+
+  // ====================================================================
+  // PLAZA 3D GLB — Hide loader spinner when model finishes loading
+  // ====================================================================
+  const plaza = document.querySelector('#plaza');
+  const plazaLoader = document.querySelector('#plaza-loader');
+  const plazaText = plaza ? plaza.querySelector('a-text') : null;
+  if (plaza) {
+    plaza.addEventListener('model-loaded', () => {
+      console.log('[ciudad-plaza] plaza2.glb loaded ✓');
+      plaza.setAttribute('data-model-loaded', 'true');
+      // Ocultar loader
+      if (plazaLoader) plazaLoader.parentNode.removeChild(plazaLoader);
+      if (plazaText) plazaText.parentNode.removeChild(plazaText);
+      // Log de bounds para saber el tamaño real del modelo
+      try {
+        const obj = plaza.object3D;
+        const box = new THREE.Box3().setFromObject(obj);
+        const size = box.getSize(new THREE.Vector3());
+        console.log(`[ciudad-plaza] modelo bounds: ${size.x.toFixed(1)}×${size.y.toFixed(1)}×${size.z.toFixed(1)}`);
+      } catch(e) { console.warn('bounds error', e); }
+    });
+    // Timeout fallback: si no carga en 15s, mostrar error
+    setTimeout(() => {
+      if (plaza.getAttribute('data-model-loaded') === 'false') {
+        console.warn('[ciudad-plaza] plaza2.glb no cargó en 15s');
+        if (plazaText) plazaText.setAttribute('value', '⚠️ Error cargando plaza2.glb');
+      }
+    }, 15000);
+  }
 
   const { token } = await ensureAuth();
   document.body.classList.add('ciudad-ready');
