@@ -25,6 +25,14 @@
     pointer-events: none; /* permite ver/interactuar con la escena detrás */
   }
   #login-bg > * { pointer-events: auto; } /* el panel sí captura clicks */
+  /* El mundo 3D (a-scene + canvas) debe estar siempre DEBAJO del login */
+  a-scene, .a-scene, .a-canvas, canvas.a-canvas {
+    position: fixed !important;
+    top: 0; left: 0;
+    width: 100% !important; height: 100% !important;
+    z-index: 1 !important;
+    pointer-events: auto;
+  }
   /* Hide EVERYTHING that is not the login until user authenticates */
   body:not(.ciudad-ready) a-scene,
   body:not(.ciudad-ready) .a-canvas,
@@ -40,6 +48,29 @@
     opacity: 0 !important;
     pointer-events: none !important;
   }
+  /* Botones flotantes SIEMPRE visibles (logout/login/registro), encima del mundo 3D */
+  #floating-auth {
+    position: fixed !important;
+    top: 20px; left: 20px;
+    z-index: 1000001 !important;
+    display: flex !important; gap: 8px;
+    pointer-events: auto !important;
+  }
+  #floating-auth button {
+    pointer-events: auto !important;
+    cursor: pointer;
+    background: #0a0e1a; color: #00d4ff;
+    border: 1px solid #00d4ff; border-radius: 8px;
+    padding: 8px 14px; font-family: monospace; font-size: 13px;
+    transition: all 0.2s;
+  }
+  #floating-auth button:hover {
+    background: #00d4ff; color: #0a0e1a;
+    box-shadow: 0 0 20px rgba(0,212,255,0.6);
+  }
+  /* Cuando está autenticado, el botón "Cerrar Sesión" debe seguir visible */
+  #floating-auth.logged-in #btn-show-login { display: none; }
+  #floating-auth.logged-in #btn-show-register { display: none; }
   body.ciudad-ready #login-bg {
     display: none !important;
   }
@@ -274,11 +305,18 @@
 <!-- ============== LOGIN ============== -->
 <div id="login-bg">
   <div id="login-box">
-    <h1>🌆 SXXYSECRET // CIUDAD 3D</h1>
-    <p>Para entrar al mundo multijugador, inicia sesión con tu cuenta de sxxysecret.com</p>
+    <h1 id="login-title">🌆 SXXYSECRET // CIUDAD 3D</h1>
+    <p id="login-subtitle">Para entrar al mundo multijugador, inicia sesión con tu cuenta de sxxysecret.com</p>
+    <input type="hidden" id="login-mode" value="login" />
+    <div id="name-row" style="display:none;">
+      <input id="login-name" type="text" placeholder="Tu nombre" autocomplete="name" />
+    </div>
     <input id="login-email" type="email" placeholder="email@dominio.com" autocomplete="username" />
     <input id="login-password" type="password" placeholder="contraseña" autocomplete="current-password" />
-    <button id="login-btn">ENTRAR</button>
+    <div id="register-fields" style="display:none;">
+      <input id="login-phone" type="tel" placeholder="teléfono (10 dígitos)" autocomplete="tel" />
+    </div>
+    <button id="login-btn-submit">ENTRAR</button>
     <div id="login-error"></div>
     <div id="login-status"></div>
   </div>
@@ -312,6 +350,13 @@
     <kbd>W</kbd> avanzar · <kbd>A</kbd>/<kbd>D</kbd> girar · <kbd>ESPACIO</kbd> saltar · <kbd>SHIFT</kbd> correr · <kbd>R</kbd> reset · <kbd>T</kbd> chat
   </p>
   <p style="color: #888; font-size: 10px;">🌐 Multiusuario en tiempo real — todos ven a todos</p>
+</div>
+
+<!-- ============== FLOATING AUTH BUTTONS (always visible) ============== -->
+<div id="floating-auth">
+  <button id="btn-show-login" title="Iniciar Sesión">🔑 Login</button>
+  <button id="btn-show-register" title="Crear cuenta nueva">📝 Registro</button>
+  <button id="btn-logout" title="Cerrar Sesión" style="display:none;">🚪 Cerrar Sesión</button>
 </div>
 
 <!-- ============== A-FRAME SCENE ============== -->
@@ -388,7 +433,8 @@ const $ = (id) => document.getElementById(id);
 const loginBg   = $('login-bg');
 const loginErr  = $('login-error');
 const loginStat = $('login-status');
-const loginBtn  = $('login-btn');
+const loginBtn  = $('login-btn-submit');
+const loginBox  = $('login-box');
 
 
 function setStatus(msg, color = '#888') {
@@ -415,7 +461,8 @@ async function ensureAuth() {
     setStatus('Ingresa tus credenciales de sxxysecret.com');
     setTimeout(() => $('login-email').focus(), 100);
 
-        loginBtn.onclick = async () => {
+    loginBtn.onclick = async () => {
+      const mode = $('login-mode').value; // 'login' or 'register'
       const email = $('login-email').value.trim();
       const password = $('login-password').value;
       if (!email || !password) {
@@ -423,16 +470,24 @@ async function ensureAuth() {
         return;
       }
       loginErr.textContent = '';
-      setStatus('Autenticando...', '#00d4ff');
+      setStatus(mode === 'register' ? 'Creando cuenta...' : 'Autenticando...', '#00d4ff');
       try {
-        const r = await fetch('/api/auth/login', {
+        const endpoint = mode === 'register' ? '/api/auth/register' : '/api/auth/login';
+        const body = mode === 'register'
+          ? {
+              email, password,
+              name: ($('login-name')?.value || email.split('@')[0]).trim(),
+              phone: ($('login-phone')?.value || '').trim()
+            }
+          : { email, password };
+        const r = await fetch(endpoint, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ email, password }),
+          body: JSON.stringify(body),
         });
         const data = await r.json();
         if (!r.ok) {
-          loginErr.textContent = data.message || data.error || 'Login inválido';
+          loginErr.textContent = data.message || data.error || 'Error';
           setStatus('');
           return;
         }
@@ -961,6 +1016,46 @@ function gameLoop(now) {
 }
 
 // =====================================================================
+// FLOATING AUTH BUTTONS (always visible, encima del mundo 3D)
+// =====================================================================
+const floatingAuth = $('floating-auth');
+const btnShowLogin = $('btn-show-login');
+const btnShowRegister = $('btn-show-register');
+const btnLogout = $('btn-logout');
+
+function showLogin() {
+  document.body.classList.remove('ciudad-ready');
+  loginBg.style.display = 'flex';
+  // Volver a modo login: mostrar campos de login, ocultar registro
+  loginBox.querySelector('#login-title').textContent = '🌆 SXXYSECRET // CIUDAD 3D';
+  loginBox.querySelector('#login-subtitle').textContent = 'Inicia sesión para entrar al mundo 3D multiusuario';
+  loginBox.querySelector('#login-btn-submit').textContent = 'ENTRAR';
+  loginBox.querySelector('#login-mode').value = 'login';
+  loginBox.querySelector('#register-fields').style.display = 'none';
+  loginBox.querySelector('#name-row').style.display = 'none';
+  floatingAuth.classList.remove('logged-in');
+}
+function showRegister() {
+  document.body.classList.remove('ciudad-ready');
+  loginBg.style.display = 'flex';
+  loginBox.querySelector('#login-title').textContent = '📝 CREAR CUENTA';
+  loginBox.querySelector('#login-subtitle').textContent = 'Regístrate para acceder al mundo 3D';
+  loginBox.querySelector('#login-btn-submit').textContent = 'CREAR CUENTA';
+  loginBox.querySelector('#login-mode').value = 'register';
+  loginBox.querySelector('#register-fields').style.display = 'block';
+  loginBox.querySelector('#name-row').style.display = 'block';
+  floatingAuth.classList.remove('logged-in');
+}
+function doLogout() {
+  localStorage.removeItem('ciudad_token');
+  localStorage.removeItem('ciudad_user');
+  location.reload();
+}
+btnShowLogin.addEventListener('click', showLogin);
+btnShowRegister.addEventListener('click', showRegister);
+btnLogout.addEventListener('click', doLogout);
+
+// =====================================================================
 // BOOT
 // =====================================================================
 let client = null;
@@ -970,6 +1065,9 @@ window.addEventListener('load', async () => {
 
   const { token } = await ensureAuth();
   document.body.classList.add('ciudad-ready');
+  // Usuario autenticado: ocultar login, mostrar botón logout
+  floatingAuth.classList.add('logged-in');
+  btnLogout.style.display = 'inline-block';
   client = new CiudadClient(token);
   client.connect();
 });
