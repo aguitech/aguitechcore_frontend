@@ -30,7 +30,7 @@
     padding: 12px 14px !important;
     color: #00d4ff !important;
     box-shadow: 0 0 24px rgba(0,212,255,0.2) !important;
-    z-index: 2147483647 !important;
+    z-index: 1001 !important;
     pointer-events: auto !important;
     visibility: visible !important;
     opacity: 1 !important;
@@ -74,7 +74,7 @@
     color: #00d4ff !important;
     font-family: monospace;
     font-size: 12px;
-    z-index: 2147483647 !important;
+    z-index: 1001 !important;
     box-shadow: 0 0 18px rgba(0,212,255,0.25) !important;
   }
   #user-pill.visible { display: inline-flex !important; }
@@ -296,7 +296,7 @@
   (function ensureLoginPanel() {
     var bg = document.getElementById('login-bg');
     if (!bg) return;
-    bg.style.cssText = 'position:fixed!important;left:20px!important;bottom:110px!important;width:280px!important;z-index:2147483647!important;visibility:visible!important;opacity:1!important;pointer-events:auto!important;';
+    bg.style.cssText = 'position:fixed!important;left:20px!important;bottom:110px!important;width:280px!important;z-index:1001!important;visibility:visible!important;opacity:1!important;pointer-events:auto!important;';
     document.body && (document.body.className = document.body.className.replace('ciudad-ready','').trim());
   })();
 </script>
