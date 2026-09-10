@@ -1,0 +1,1278 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SXXYSECRET // TETRIS BATTLE — Compite con 100 jugadores</title>
+<meta name="description" content="Tetris multijugador en tiempo real. Hasta 100 jugadores en la misma sala. Todos con el mismo avatar. Sé el #1.">
+<meta property="og:title" content="SXXYSECRET // TETRIS BATTLE">
+<meta property="og:description" content="Compite contra hasta 100 jugadores. Ranking en tiempo real.">
+<meta property="og:type" content="website">
+<meta property="og:image" content="/og.png">
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'><rect width='64' height='64' fill='%23000'/><text y='50' x='8' font-size='52' font-family='monospace' font-weight='bold' fill='%23ffaa00'>▣</text></svg>">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700;800&family=Orbitron:wght@500;700;900&display=swap" rel="stylesheet">
+<style>
+/* ============================================================
+   AGUITECH // SXXYSECRET — TETRIS BATTLE
+   Estética: cyberpunk-amber (negro + #ffaa00 + verde terminal)
+   Heredado del index4.php de la ciudad 3D
+   ============================================================ */
+:root{
+  --bg:#000;
+  --bg-soft:#0a0a0a;
+  --panel:rgba(0,0,0,0.85);
+  --panel-border:#ffaa00;
+  --amber:#ffaa00;
+  --amber-dim:#cc8800;
+  --amber-glow:rgba(255,170,0,0.4);
+  --green:#0f0;
+  --green-dim:#0a0;
+  --red:#ff3355;
+  --cyan:#00d4ff;
+  --magenta:#ff00aa;
+  --text:#ffaa00;
+  --text-bright:#fff;
+  --text-muted:#888;
+  --grid-line:rgba(255,170,0,0.08);
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{height:100%;overflow:hidden;background:#000;font-family:'JetBrains Mono',monospace;color:var(--text);user-select:none;-webkit-user-select:none}
+body{
+  background:
+    radial-gradient(circle at 20% 30%, rgba(255,170,0,0.08), transparent 40%),
+    radial-gradient(circle at 80% 70%, rgba(255,170,0,0.06), transparent 40%),
+    #000;
+}
+
+/* === Animated grid background === */
+.bg-grid{
+  position:fixed;inset:0;pointer-events:none;z-index:0;
+  background-image:
+    linear-gradient(var(--grid-line) 1px, transparent 1px),
+    linear-gradient(90deg, var(--grid-line) 1px, transparent 1px);
+  background-size:40px 40px;
+  animation:gridShift 20s linear infinite;
+  mask-image:radial-gradient(ellipse at center, black 30%, transparent 80%);
+}
+@keyframes gridShift{
+  from{background-position:0 0, 0 0}
+  to{background-position:40px 40px, 40px 40px}
+}
+
+/* === HUD top bar === */
+.hud-top{
+  position:fixed;top:16px;left:16px;right:16px;display:flex;justify-content:space-between;
+  align-items:flex-start;z-index:10;pointer-events:none;
+}
+.hud-tag{
+  background:var(--panel);padding:8px 14px;border-radius:8px;border-left:3px solid var(--amber);
+  backdrop-filter:blur(8px);font-size:11px;letter-spacing:0.2em;
+}
+.hud-tag b{color:var(--amber)}
+.hud-status{
+  background:var(--panel);padding:8px 14px;border-radius:8px;border:1px solid var(--amber);
+  font-size:11px;letter-spacing:0.2em;
+  display:flex;align-items:center;gap:8px;
+}
+.hud-status .dot{
+  width:8px;height:8px;border-radius:50%;background:var(--green);
+  box-shadow:0 0 12px var(--green);
+  animation:pulse 1.6s ease-in-out infinite;
+}
+@keyframes pulse{50%{opacity:0.5;transform:scale(0.85)}}
+
+/* === Main layout === */
+.app{
+  position:relative;z-index:1;height:100%;
+  display:grid;
+  grid-template-columns:280px 1fr 320px;
+  gap:14px;padding:60px 16px 80px;
+}
+@media (max-width:1100px){
+  .app{grid-template-columns:1fr;gap:10px;overflow-y:auto;padding-top:60px;padding-bottom:60px}
+}
+
+/* === Sidebar (left) — Player card + controls === */
+.sidebar{
+  display:flex;flex-direction:column;gap:12px;min-width:0;
+}
+.panel{
+  background:var(--panel);border:1px solid rgba(255,170,0,0.25);
+  border-radius:10px;padding:14px;backdrop-filter:blur(8px);
+}
+.panel h3{
+  font-family:'Orbitron',monospace;font-size:11px;font-weight:700;
+  color:var(--amber);letter-spacing:0.3em;margin-bottom:10px;
+  border-bottom:1px solid rgba(255,170,0,0.2);padding-bottom:6px;
+  display:flex;align-items:center;gap:6px;
+}
+.panel h3::before{content:'//';color:var(--amber-dim)}
+
+/* Avatar card */
+.avatar-card{display:flex;flex-direction:column;align-items:center;gap:10px;padding:16px 12px}
+.avatar-card svg{filter:drop-shadow(0 0 20px var(--amber-glow))}
+.avatar-id{
+  font-size:10px;letter-spacing:0.2em;color:var(--text-muted);
+  text-align:center;
+}
+.avatar-id b{color:var(--amber);font-size:12px}
+
+/* Stats */
+.stat-row{
+  display:flex;justify-content:space-between;align-items:baseline;
+  padding:6px 0;font-size:13px;
+  border-bottom:1px dashed rgba(255,170,0,0.1);
+}
+.stat-row:last-child{border-bottom:none}
+.stat-label{color:var(--text-muted);font-size:10px;letter-spacing:0.15em;text-transform:uppercase}
+.stat-value{font-family:'Orbitron',monospace;font-weight:700;color:var(--amber);font-size:18px}
+.stat-value.big{font-size:32px}
+
+/* Next piece preview */
+.preview-box{
+  width:100%;aspect-ratio:1;background:#000;border:1px solid rgba(255,170,0,0.3);
+  border-radius:6px;display:flex;align-items:center;justify-content:center;
+  margin-bottom:10px;
+}
+.preview-box.small{width:60px;height:60px;margin:0}
+
+/* Controls list */
+.controls-list{font-size:11px;line-height:1.7}
+.controls-list .key{
+  display:inline-block;background:#222;color:var(--amber);
+  padding:1px 6px;border-radius:3px;border:1px solid var(--amber-dim);
+  margin-right:6px;min-width:18px;text-align:center;font-weight:700;
+}
+
+/* === Center — Game canvas === */
+.center{
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  min-width:0;min-height:0;position:relative;
+}
+.game-wrap{
+  position:relative;
+  display:flex;align-items:flex-start;gap:14px;
+}
+canvas#game{
+  background:#000;border:2px solid var(--amber);
+  box-shadow:0 0 40px var(--amber-glow), inset 0 0 20px rgba(255,170,0,0.1);
+  border-radius:4px;
+  display:block;
+}
+canvas#game.over::after{
+  content:'GAME OVER';position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);
+  color:var(--red);font-family:'Orbitron';font-size:36px;font-weight:900;
+  text-shadow:0 0 20px var(--red);
+}
+
+.side-panel{
+  display:flex;flex-direction:column;gap:10px;
+  min-width:120px;
+}
+
+/* === Right sidebar — Leaderboard === */
+.leaderboard{
+  display:flex;flex-direction:column;gap:8px;
+  min-width:0;height:100%;overflow:hidden;
+}
+.lb-list{
+  list-style:none;display:flex;flex-direction:column;gap:4px;
+  overflow-y:auto;max-height:calc(100vh - 200px);
+  padding-right:4px;
+}
+.lb-list::-webkit-scrollbar{width:6px}
+.lb-list::-webkit-scrollbar-thumb{background:var(--amber-dim);border-radius:3px}
+.lb-item{
+  display:flex;align-items:center;gap:10px;
+  padding:8px 10px;background:rgba(0,0,0,0.6);
+  border:1px solid rgba(255,170,0,0.15);border-radius:6px;
+  font-size:11px;transition:all 0.2s;
+}
+.lb-item:hover{background:rgba(255,170,0,0.1);border-color:var(--amber)}
+.lb-item.you{
+  background:rgba(255,170,0,0.15);border-color:var(--amber);
+  box-shadow:0 0 12px var(--amber-glow);
+}
+.lb-item.you .lb-name::after{content:' ◄';color:var(--amber)}
+.lb-rank{
+  font-family:'Orbitron',monospace;font-weight:900;color:var(--amber);
+  min-width:28px;text-align:right;font-size:14px;
+}
+.lb-item:nth-child(1) .lb-rank{color:var(--green);text-shadow:0 0 8px var(--green)}
+.lb-item:nth-child(2) .lb-rank{color:#ccc}
+.lb-item:nth-child(3) .lb-rank{color:#cd7f32}
+.lb-name{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--text-bright)}
+.lb-score{font-family:'Orbitron';color:var(--amber);font-weight:700;font-size:13px}
+.lb-empty{text-align:center;padding:20px;color:var(--text-muted);font-size:11px;letter-spacing:0.15em}
+
+.lb-footer{
+  font-size:10px;color:var(--text-muted);text-align:center;
+  padding-top:8px;border-top:1px solid rgba(255,170,0,0.15);
+  letter-spacing:0.15em;
+}
+
+/* === Position badge (above game) === */
+.position-display{
+  font-family:'Orbitron',monospace;font-weight:900;
+  font-size:48px;color:var(--amber);text-align:center;
+  margin-bottom:8px;line-height:1;
+  text-shadow:0 0 20px var(--amber-glow);
+}
+.position-display .pos-label{
+  display:block;font-size:10px;letter-spacing:0.3em;
+  color:var(--text-muted);font-weight:400;margin-bottom:4px;
+}
+.position-display .pos-suffix{font-size:24px;color:var(--text-muted);margin-left:4px}
+
+/* === Modal overlays === */
+.modal-bg{
+  position:fixed;inset:0;background:rgba(0,0,0,0.85);
+  display:flex;align-items:center;justify-content:center;z-index:100;
+  backdrop-filter:blur(8px);
+}
+.modal{
+  background:#0a0a0a;border:2px solid var(--amber);border-radius:12px;
+  padding:32px;max-width:480px;width:90%;text-align:center;
+  box-shadow:0 0 60px var(--amber-glow);
+}
+.modal h1{
+  font-family:'Orbitron',monospace;font-weight:900;color:var(--amber);
+  font-size:32px;letter-spacing:0.1em;margin-bottom:6px;
+  text-shadow:0 0 20px var(--amber-glow);
+}
+.modal h2{
+  font-family:'Orbitron',monospace;color:var(--amber);
+  font-size:14px;letter-spacing:0.3em;margin-bottom:24px;
+}
+.modal p{color:var(--text-muted);font-size:12px;line-height:1.6;margin-bottom:24px}
+.modal .btn-row{display:flex;gap:12px;justify-content:center;flex-wrap:wrap}
+.btn{
+  background:transparent;color:var(--amber);border:2px solid var(--amber);
+  padding:12px 24px;font-family:'Orbitron',monospace;font-size:14px;font-weight:700;
+  letter-spacing:0.2em;cursor:pointer;border-radius:6px;
+  transition:all 0.2s;text-transform:uppercase;
+}
+.btn:hover{
+  background:var(--amber);color:#000;
+  box-shadow:0 0 20px var(--amber-glow);
+  transform:translateY(-2px);
+}
+.btn.primary{background:var(--amber);color:#000}
+.btn.primary:hover{background:var(--text-bright);box-shadow:0 0 30px var(--amber-glow)}
+.btn.ghost{border-color:rgba(255,170,0,0.4);color:var(--text-muted);font-size:11px;padding:8px 16px}
+.btn.ghost:hover{color:var(--amber);border-color:var(--amber)}
+
+/* Start screen big stats */
+.modal .stats-grid{
+  display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin:20px 0;
+}
+.modal .stat{
+  background:rgba(255,170,0,0.08);border:1px solid rgba(255,170,0,0.3);
+  border-radius:6px;padding:12px 8px;
+}
+.modal .stat b{
+  display:block;font-family:'Orbitron';font-size:22px;color:var(--amber);
+}
+.modal .stat span{font-size:9px;letter-spacing:0.2em;color:var(--text-muted)}
+
+/* Bottom footer */
+.bottom-bar{
+  position:fixed;bottom:14px;left:16px;right:16px;display:flex;justify-content:space-between;
+  align-items:center;z-index:10;pointer-events:none;font-size:10px;
+  color:var(--text-muted);letter-spacing:0.15em;
+}
+.bottom-bar a{color:var(--amber);text-decoration:none;pointer-events:auto}
+
+/* === Floating particles === */
+.particle{
+  position:fixed;pointer-events:none;z-index:5;
+  width:4px;height:4px;background:var(--amber);border-radius:50%;
+  opacity:0;animation:rise 4s linear forwards;
+}
+@keyframes rise{
+  0%{opacity:0;transform:translateY(0) scale(0.5)}
+  10%{opacity:0.8}
+  100%{opacity:0;transform:translateY(-100px) scale(0)}
+}
+
+/* Toast notifications */
+.toast{
+  position:fixed;top:80px;left:50%;transform:translateX(-50%);
+  background:var(--panel);border:1px solid var(--amber);padding:10px 20px;
+  border-radius:6px;color:var(--text-bright);font-size:12px;letter-spacing:0.15em;
+  z-index:200;animation:toastIn 0.3s, toastOut 0.3s 2.5s forwards;
+  backdrop-filter:blur(8px);
+}
+@keyframes toastIn{from{opacity:0;transform:translate(-50%,-10px)}to{opacity:1;transform:translate(-50%,0)}}
+@keyframes toastOut{to{opacity:0;transform:translate(-50%,-10px)}}
+
+/* Game over flash */
+@keyframes dead-shake{
+  0%,100%{transform:translate(0,0)}
+  20%{transform:translate(-2px,2px)}
+  40%{transform:translate(2px,-2px)}
+  60%{transform:translate(-2px,-2px)}
+  80%{transform:translate(2px,2px)}
+}
+canvas#game.dead{animation:dead-shake 0.3s}
+</style>
+</head>
+<body>
+
+<div class="bg-grid"></div>
+
+<!-- HUD top -->
+<div class="hud-top">
+  <div class="hud-tag">SXXYSECRET // <b>TETRIS BATTLE</b> v1.0</div>
+  <div class="hud-status">
+    <span class="dot" id="connDot"></span>
+    <span id="connText">CONECTANDO…</span>
+  </div>
+</div>
+
+<!-- Main layout -->
+<div class="app">
+
+  <!-- LEFT: Player info -->
+  <aside class="sidebar">
+    <div class="panel avatar-card">
+      <h3>YOUR AVATAR</h3>
+      <svg id="avatar" width="80" height="80" viewBox="0 0 80 80">
+        <defs>
+          <linearGradient id="bodyGrad" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0" stop-color="#ffaa00"/>
+            <stop offset="1" stop-color="#cc6600"/>
+          </linearGradient>
+          <filter id="glow"><feGaussianBlur stdDeviation="1.5"/></filter>
+        </defs>
+        <!-- Aura -->
+        <rect x="6" y="6" width="68" height="68" fill="none" stroke="#ffaa00" stroke-width="1" opacity="0.4"/>
+        <rect x="10" y="10" width="60" height="60" fill="none" stroke="#ffaa00" stroke-width="0.5" opacity="0.2"/>
+        <!-- Body -->
+        <rect x="20" y="20" width="40" height="40" fill="url(#bodyGrad)" stroke="#ffaa00" stroke-width="2"/>
+        <!-- Eyes -->
+        <rect x="28" y="32" width="6" height="8" fill="#000"/>
+        <rect x="46" y="32" width="6" height="8" fill="#000"/>
+        <rect x="30" y="34" width="2" height="2" fill="#0f0"/>
+        <rect x="48" y="34" width="2" height="2" fill="#0f0"/>
+        <!-- Mouth -->
+        <rect x="30" y="48" width="20" height="3" fill="#000"/>
+        <!-- Crown -->
+        <rect x="34" y="14" width="4" height="6" fill="#ffaa00"/>
+        <rect x="42" y="14" width="4" height="6" fill="#ffaa00"/>
+        <rect x="38" y="10" width="4" height="6" fill="#ffaa00"/>
+      </svg>
+      <div class="avatar-id">ID<br><b id="playerId">-----</b></div>
+    </div>
+
+    <div class="panel">
+      <h3>SCORE</h3>
+      <div class="stat-row"><span class="stat-label">Score</span><span class="stat-value big" id="score">0</span></div>
+      <div class="stat-row"><span class="stat-label">Lines</span><span class="stat-value" id="lines">0</span></div>
+      <div class="stat-row"><span class="stat-label">Level</span><span class="stat-value" id="level">1</span></div>
+      <div class="stat-row"><span class="stat-label">Tetris</span><span class="stat-value" id="tetrises">0</span></div>
+    </div>
+
+    <div class="panel">
+      <h3>NEXT</h3>
+      <div class="preview-box"><canvas id="next" width="120" height="120"></canvas></div>
+      <h3 style="margin-top:14px">HOLD</h3>
+      <div class="preview-box small" style="margin:0 auto"><canvas id="hold" width="60" height="60"></canvas></div>
+    </div>
+
+    <div class="panel controls-list">
+      <h3>CONTROLS</h3>
+      <div><span class="key">←</span><span class="key">→</span> Move</div>
+      <div><span class="key">↓</span> Soft drop</div>
+      <div><span class="key">↑</span> / <span class="key">X</span> Rotate CW</div>
+      <div><span class="key">Z</span> Rotate CCW</div>
+      <div><span class="key">SPACE</span> Hard drop</div>
+      <div><span class="key">C</span> / <span class="key">⇧</span> Hold</div>
+      <div><span class="key">P</span> Pause</div>
+    </div>
+  </aside>
+
+  <!-- CENTER: Game canvas -->
+  <main class="center">
+    <div class="position-display" id="positionDisplay">
+      <span class="pos-label">CURRENT POSITION</span>
+      <span id="posNum">—</span><span class="pos-suffix" id="posSuf"></span>
+    </div>
+    <div class="game-wrap">
+      <canvas id="game" width="300" height="600"></canvas>
+      <div class="side-panel">
+        <div class="panel" style="padding:8px">
+          <div class="stat-row" style="padding:3px 0"><span class="stat-label">PTS/LINE</span><span class="stat-value" style="font-size:14px">100</span></div>
+          <div class="stat-row" style="padding:3px 0"><span class="stat-label">T-SPIN</span><span class="stat-value" style="font-size:14px">800</span></div>
+          <div class="stat-row" style="padding:3px 0"><span class="stat-label">B2B×1.5</span><span class="stat-value" style="font-size:14px">✓</span></div>
+          <div class="stat-row" style="padding:3px 0"><span class="stat-label">COMBO</span><span class="stat-value" style="font-size:14px">+50</span></div>
+        </div>
+        <div class="panel" style="padding:8px;text-align:center">
+          <div class="stat-label" style="margin-bottom:6px">PLAYERS LIVE</div>
+          <div class="stat-value" style="font-size:24px" id="playerCount">1</div>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <!-- RIGHT: Leaderboard -->
+  <aside class="leaderboard panel">
+    <h3>🏆 LIVE LEADERBOARD</h3>
+    <ul class="lb-list" id="lbList">
+      <li class="lb-empty">Cargando ranking…</li>
+    </ul>
+    <div class="lb-footer">
+      <span id="totalPlayers">0</span> jugadores conectados · TOP <span id="topN">20</span>
+    </div>
+  </aside>
+
+</div>
+
+<!-- Bottom bar -->
+<div class="bottom-bar">
+  <span>SXXYSECRET.COM / JUEGO · by <a href="https://aguitech.com" target="_blank">AGUITECH</a></span>
+  <span id="roomIdDisplay">ROOM: GLOBAL</span>
+</div>
+
+<!-- Start modal -->
+<div class="modal-bg" id="startModal" style="display:none">
+  <div class="modal">
+    <h1>SXXYSECRET</h1>
+    <h2>// TETRIS BATTLE</h2>
+    <p>Hasta <b style="color:var(--amber)">100 jugadores</b> en la misma arena.<br>
+       Todos con el mismo avatar. Compite por el <b style="color:var(--amber)">#1</b>.</p>
+    <div class="stats-grid">
+      <div class="stat"><b id="statTotal">0</b><span>TOTAL JUGADORES</span></div>
+      <div class="stat"><b id="statTop">0</b><span>TOP SCORE</span></div>
+      <div class="stat"><b id="statAvg">0</b><span>PROMEDIO</span></div>
+    </div>
+    <div class="btn-row">
+      <button class="btn primary" id="startBtn">▶ INICIAR PARTIDA</button>
+    </div>
+    <p style="margin-top:18px;font-size:10px">Presiona ENTER o ESPACIO para empezar</p>
+  </div>
+</div>
+
+<!-- Login modal -->
+<div class="modal-bg" id="loginModal">
+  <div class="modal" style="max-width:380px">
+    <h1>SXXYSECRET</h1>
+    <h2>// LOGIN</h2>
+    <p>Inicia sesión con tu cuenta de <b style="color:var(--amber)">sxxysecret.com</b><br>
+       para entrar al leaderboard con tu nombre real.</p>
+    <form id="loginForm" style="display:flex;flex-direction:column;gap:10px;text-align:left">
+      <div>
+        <label style="font-size:10px;letter-spacing:0.15em;color:var(--text-muted);display:block;margin-bottom:4px">EMAIL</label>
+        <input id="loginEmail" type="email" required autocomplete="email"
+          style="width:100%;background:#000;color:var(--amber);border:1px solid var(--amber-dim);padding:10px;border-radius:4px;font-family:inherit;font-size:13px">
+      </div>
+      <div>
+        <label style="font-size:10px;letter-spacing:0.15em;color:var(--text-muted);display:block;margin-bottom:4px">PASSWORD</label>
+        <input id="loginPass" type="password" required autocomplete="current-password"
+          style="width:100%;background:#000;color:var(--amber);border:1px solid var(--amber-dim);padding:10px;border-radius:4px;font-family:inherit;font-size:13px">
+      </div>
+      <div id="loginError" style="color:var(--red);font-size:11px;min-height:14px"></div>
+      <button class="btn primary" type="submit" id="loginSubmit" style="margin-top:6px">▶ ENTRAR</button>
+    </form>
+    <p style="margin-top:14px;font-size:10px">¿No tienes cuenta? <a href="https://sxxysecret.com/register" target="_blank" style="color:var(--amber)">Regístrate aquí</a></p>
+  </div>
+</div>
+
+<!-- Game over modal -->
+<div class="modal-bg" id="deadModal" style="display:none">
+  <div class="modal">
+    <h1 style="color:var(--red)">GAME OVER</h1>
+    <h2>// POSICIÓN FINAL: <span id="deadPos" style="color:var(--amber)">—</span></h2>
+    <div class="stats-grid">
+      <div class="stat"><b id="deadScore">0</b><span>SCORE</span></div>
+      <div class="stat"><b id="deadLines">0</b><span>LINES</span></div>
+      <div class="stat"><b id="deadTetris">0</b><span>TETRIS</span></div>
+    </div>
+    <div class="btn-row">
+      <button class="btn primary" id="restartBtn">↻ JUGAR DE NUEVO</button>
+      <button class="btn ghost" onclick="window.close()">✕ SALIR</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// =====================================================================
+// SXXYSECRET // TETRIS BATTLE — Core game engine
+// =====================================================================
+'use strict';
+
+// === CONFIG ===
+const COLS = 10;
+const ROWS = 20;
+const CELL = 30; // px per cell
+const HIDDEN_ROWS = 2; // spawn zone above visible
+
+// === COLORS (cyberpunk-amber palette, all share the avatar) ===
+const COLORS = {
+  I: '#00d4ff', // cyan
+  O: '#ffaa00', // amber
+  T: '#ff00aa', // magenta
+  S: '#0f0',    // green
+  Z: '#ff3355', // red
+  L: '#ffaa00', // amber (same as O — same avatar)
+  J: '#00d4ff', // cyan (same as I — same avatar)
+  ghost: 'rgba(255,170,0,0.18)',
+  grid: 'rgba(255,170,0,0.08)',
+};
+
+// === SHAPES ===
+const SHAPES = {
+  I: [[0,0,0,0],[1,1,1,1],[0,0,0,0],[0,0,0,0]],
+  O: [[1,1],[1,1]],
+  T: [[0,1,0],[1,1,1],[0,0,0]],
+  S: [[0,1,1],[1,1,0],[0,0,0]],
+  Z: [[1,1,0],[0,1,1],[0,0,0]],
+  L: [[0,0,1],[1,1,1],[0,0,0]],
+  J: [[1,0,0],[1,1,1],[0,0,0]],
+};
+
+// === SCORE TABLE (classic guideline) ===
+const LINE_SCORES = [0, 100, 300, 500, 800];
+const T_SPIN_BONUS = 400;
+const COMBO_BONUS = 50;
+const SOFT_DROP = 1;
+const HARD_DROP = 2;
+
+// === STATE ===
+let board, cur, next, hold, score, lines, level, tetrises, combo, b2b, dead, paused;
+let dropTimer, dropInterval, lastTime;
+const canvas = document.getElementById('game');
+const ctx = canvas.getContext('2d');
+const nextCanvas = document.getElementById('next');
+const nextCtx = nextCanvas.getContext('2d');
+const holdCanvas = document.getElementById('hold');
+const holdCtx = holdCanvas.getContext('2d');
+
+// === PIECE GENERATION (7-bag random) ===
+let bag = [];
+function refillBag() {
+  const types = Object.keys(SHAPES);
+  for (let i = types.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [types[i], types[j]] = [types[j], types[i]];
+  }
+  bag.push(...types);
+}
+function takePiece() {
+  if (bag.length <= 7) refillBag();
+  return bag.shift();
+}
+
+function newPiece(type) {
+  const shape = SHAPES[type];
+  const w = shape[0].length;
+  return {
+    type,
+    shape: shape.map(r => r.slice()),
+    x: Math.floor((COLS - w) / 2),
+    y: -1, // start just above visible area
+    rot: 0,
+  };
+}
+
+function resetState() {
+  board = Array.from({length: ROWS + HIDDEN_ROWS}, () => Array(COLS).fill(null));
+  bag = [];
+  refillBag();
+  next = takePiece();
+  hold = null;
+  cur = newPiece(takePiece());
+  score = 0;
+  lines = 0;
+  level = 1;
+  tetrises = 0;
+  combo = -1;
+  b2b = false;
+  dead = false;
+  paused = false;
+  dropInterval = 1000;
+  dropTimer = 0;
+  lastTime = performance.now();
+}
+
+// === DRAW ===
+function drawCell(c, x, y, color, ghost = false) {
+  const px = x * CELL, py = y * CELL;
+  c.fillStyle = ghost ? COLORS.ghost : color;
+  c.fillRect(px + 1, py + 1, CELL - 2, CELL - 2);
+  if (!ghost) {
+    // glossy highlight
+    c.fillStyle = 'rgba(255,255,255,0.15)';
+    c.fillRect(px + 2, py + 2, CELL - 4, 4);
+    // border
+    c.strokeStyle = 'rgba(0,0,0,0.5)';
+    c.lineWidth = 1;
+    c.strokeRect(px + 1.5, py + 1.5, CELL - 3, CELL - 3);
+    // amber outline glow
+    c.strokeStyle = color;
+    c.lineWidth = 1;
+    c.globalAlpha = 0.6;
+    c.strokeRect(px + 0.5, py + 0.5, CELL - 1, CELL - 1);
+    c.globalAlpha = 1;
+  }
+}
+
+function drawBoard() {
+  // Background grid
+  ctx.fillStyle = '#000';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.strokeStyle = COLORS.grid;
+  ctx.lineWidth = 0.5;
+  for (let i = 0; i <= COLS; i++) {
+    ctx.beginPath();
+    ctx.moveTo(i * CELL, 0);
+    ctx.lineTo(i * CELL, canvas.height);
+    ctx.stroke();
+  }
+  for (let i = 0; i <= ROWS; i++) {
+    ctx.beginPath();
+    ctx.moveTo(0, i * CELL);
+    ctx.lineTo(canvas.width, i * CELL);
+    ctx.stroke();
+  }
+
+  // Locked cells
+  for (let y = HIDDEN_ROWS; y < ROWS + HIDDEN_ROWS; y++) {
+    for (let x = 0; x < COLS; x++) {
+      const t = board[y][x];
+      if (t) drawCell(ctx, x, y - HIDDEN_ROWS, COLORS[t]);
+    }
+  }
+
+  // Ghost
+  if (cur && !dead) {
+    const g = ghostY();
+    for (let y = 0; y < cur.shape.length; y++) {
+      for (let x = 0; x < cur.shape[y].length; x++) {
+        if (cur.shape[y][x]) {
+          const gy = g + y - HIDDEN_ROWS;
+          if (gy >= 0) drawCell(ctx, cur.x + x, gy, COLORS[cur.type], true);
+        }
+      }
+    }
+    // Current piece
+    for (let y = 0; y < cur.shape.length; y++) {
+      for (let x = 0; x < cur.shape[y].length; x++) {
+        if (cur.shape[y][x]) {
+          const py = cur.y + y - HIDDEN_ROWS;
+          if (py >= 0) drawCell(ctx, cur.x + x, py, COLORS[cur.type]);
+        }
+      }
+    }
+  }
+}
+
+function drawPreview(c, ctx, piece, cellSize) {
+  ctx.fillStyle = '#000';
+  ctx.fillRect(0, 0, c.width, c.height);
+  if (!piece) return;
+  const shape = SHAPES[piece];
+  const w = shape[0].length;
+  const h = shape.length;
+  const offX = (c.width - w * cellSize) / 2;
+  const offY = (c.height - h * cellSize) / 2;
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      if (shape[y][x]) {
+        const px = offX + x * cellSize;
+        const py = offY + y * cellSize;
+        ctx.fillStyle = COLORS[piece];
+        ctx.fillRect(px + 1, py + 1, cellSize - 2, cellSize - 2);
+        ctx.fillStyle = 'rgba(255,255,255,0.15)';
+        ctx.fillRect(px + 2, py + 2, cellSize - 4, 3);
+        ctx.strokeStyle = COLORS[piece];
+        ctx.lineWidth = 1;
+        ctx.globalAlpha = 0.6;
+        ctx.strokeRect(px + 0.5, py + 0.5, cellSize - 1, cellSize - 1);
+        ctx.globalAlpha = 1;
+      }
+    }
+  }
+}
+
+function ghostY() {
+  let g = cur.y;
+  while (!collide(cur.shape, cur.x, g + 1)) g++;
+  return g;
+}
+
+// === COLLISION ===
+function collide(shape, x, y) {
+  for (let yy = 0; yy < shape.length; yy++) {
+    for (let xx = 0; xx < shape[yy].length; xx++) {
+      if (!shape[yy][xx]) continue;
+      const bx = x + xx, by = y + yy;
+      if (bx < 0 || bx >= COLS || by >= ROWS + HIDDEN_ROWS) return true;
+      if (by >= 0 && board[by][bx]) return true;
+    }
+  }
+  return false;
+}
+
+// === ROTATION (with simple wall kicks) ===
+const KICKS = [
+  [[0,0],[ -1,0],[1,0],[0,-1],[ -1,-1],[1,-1]],
+  [[0,0],[1,0],[ -1,0],[0,-1],[1,-1],[ -1,-1]],
+];
+function rotate(dir) {
+  if (!cur) return;
+  const m = cur.shape.length;
+  const n = cur.shape[0].length;
+  const rotated = Array.from({length: n}, (_, i) =>
+    Array.from({length: m}, (_, j) => cur.shape[m - 1 - j][i])
+  );
+  if (dir === -1) {
+    // CCW: reverse rotation
+    for (let i = 0; i < 3; i++) {
+      const r = Array.from({length: n}, (_, ii) =>
+        Array.from({length: m}, (_, jj) => rotated[m - 1 - jj][ii])
+      );
+      rotated.length = 0;
+      rotated.push(...r);
+    }
+  }
+  const kicks = KICKS[dir === 1 ? 0 : 1];
+  for (const [dx, dy] of kicks) {
+    if (!collide(rotated, cur.x + dx, cur.y + dy)) {
+      cur.shape = rotated;
+      cur.x += dx;
+      cur.y += dy;
+      return;
+    }
+  }
+}
+
+// === LOCK ===
+function lockPiece() {
+  for (let y = 0; y < cur.shape.length; y++) {
+    for (let x = 0; x < cur.shape[y].length; x++) {
+      if (cur.shape[y][x]) {
+        const by = cur.y + y;
+        if (by < 0) {
+          // Locked above visible — game over
+          gameOver();
+          return;
+        }
+        board[by][cur.x + x] = cur.type;
+      }
+    }
+  }
+  clearLines();
+  spawnNext();
+}
+
+function clearLines() {
+  let cleared = 0;
+  for (let y = ROWS + HIDDEN_ROWS - 1; y >= 0; y--) {
+    if (board[y].every(c => c !== null)) {
+      board.splice(y, 1);
+      board.unshift(Array(COLS).fill(null));
+      cleared++;
+      y++; // re-check this index
+    }
+  }
+  if (cleared > 0) {
+    let pts = LINE_SCORES[cleared] * level;
+    if (cleared === 4) {
+      tetrises++;
+      if (b2b) pts = Math.floor(pts * 1.5);
+      b2b = true;
+    } else {
+      b2b = false;
+    }
+    if (combo >= 0) pts += COMBO_BONUS * (combo + 1) * level;
+    combo++;
+    score += pts;
+    lines += cleared;
+    const newLevel = Math.floor(lines / 10) + 1;
+    if (newLevel > level) {
+      level = newLevel;
+      dropInterval = Math.max(80, 1000 - (level - 1) * 80);
+    }
+    showToast(cleared === 4 ? '⚡ TETRIS! +' + pts : cleared + 'x LINE +' + pts);
+  } else {
+    combo = -1;
+  }
+}
+
+function spawnNext() {
+  cur = newPiece(next);
+  next = takePiece();
+  // Check spawn collision
+  if (collide(cur.shape, cur.x, cur.y)) {
+    gameOver();
+  }
+}
+
+function gameOver() {
+  dead = true;
+  canvas.classList.add('dead', 'over');
+  setTimeout(() => canvas.classList.remove('dead'), 300);
+  stopLoop();
+  reportFinalScore().then(() => {
+    fetchLeaderboard();
+    document.getElementById('deadScore').textContent = score.toLocaleString();
+    document.getElementById('deadLines').textContent = lines;
+    document.getElementById('deadTetris').textContent = tetrises;
+    document.getElementById('deadPos').textContent = '...';
+    document.getElementById('deadModal').style.display = 'flex';
+  });
+}
+
+function restart() {
+  document.getElementById('deadModal').style.display = 'none';
+  canvas.classList.remove('over');
+  resetState();
+  startLoop();
+}
+
+// === INPUT ===
+document.addEventListener('keydown', e => {
+  if (dead) {
+    if (e.key === 'Enter' || e.key === ' ') {
+      restart();
+      e.preventDefault();
+    }
+    return;
+  }
+  if (paused && e.key !== 'p' && e.key !== 'P') return;
+  switch (e.key) {
+    case 'ArrowLeft':
+      if (!collide(cur.shape, cur.x - 1, cur.y)) cur.x--;
+      break;
+    case 'ArrowRight':
+      if (!collide(cur.shape, cur.x + 1, cur.y)) cur.x++;
+      break;
+    case 'ArrowDown':
+      if (!collide(cur.shape, cur.x, cur.y + 1)) {
+        cur.y++;
+        score += SOFT_DROP;
+      }
+      break;
+    case 'ArrowUp':
+    case 'x': case 'X':
+      rotate(1);
+      break;
+    case 'z': case 'Z':
+      rotate(-1);
+      break;
+    case ' ':
+      while (!collide(cur.shape, cur.x, cur.y + 1)) {
+        cur.y++;
+        score += HARD_DROP;
+      }
+      lockPiece();
+      e.preventDefault();
+      break;
+    case 'c': case 'C':
+    case 'Shift':
+      doHold();
+      break;
+    case 'p': case 'P':
+      paused = !paused;
+      showToast(paused ? '⏸ PAUSA' : '▶ CONTINUAR');
+      break;
+  }
+  drawBoard();
+  drawPreview(nextCanvas, nextCtx, next, 30);
+  drawPreview(holdCanvas, holdCtx, hold, 15);
+  updateUI();
+});
+
+function doHold() {
+  if (hold === null) {
+    hold = cur.type;
+    cur = newPiece(takePiece());
+  } else {
+    const t = hold;
+    hold = cur.type;
+    cur = newPiece(t);
+  }
+  if (collide(cur.shape, cur.x, cur.y)) {
+    gameOver();
+  }
+}
+
+// === GAME LOOP ===
+let rafId = null;
+function loop(now) {
+  if (dead || paused) {
+    lastTime = now;
+    rafId = requestAnimationFrame(loop);
+    return;
+  }
+  const dt = now - lastTime;
+  lastTime = now;
+  dropTimer += dt;
+  if (dropTimer >= dropInterval) {
+    dropTimer = 0;
+    if (!collide(cur.shape, cur.x, cur.y + 1)) {
+      cur.y++;
+    } else {
+      lockPiece();
+    }
+  }
+  drawBoard();
+  rafId = requestAnimationFrame(loop);
+}
+function startLoop() {
+  if (rafId) cancelAnimationFrame(rafId);
+  lastTime = performance.now();
+  rafId = requestAnimationFrame(loop);
+  reportLoopStart();
+}
+function stopLoop() {
+  if (rafId) cancelAnimationFrame(rafId);
+  rafId = null;
+}
+
+// === UI ===
+function updateUI() {
+  document.getElementById('score').textContent = score.toLocaleString();
+  document.getElementById('lines').textContent = lines;
+  document.getElementById('level').textContent = level;
+  document.getElementById('tetrises').textContent = tetrises;
+}
+
+function showToast(msg) {
+  const t = document.createElement('div');
+  t.className = 'toast';
+  t.textContent = msg;
+  document.body.appendChild(t);
+  setTimeout(() => t.remove(), 3000);
+}
+
+// =====================================================================
+// NETWORKING — multiplayer leaderboard (authenticated)
+// =====================================================================
+// Uses the sxxysecret JWT token from localStorage. The main app stores it
+// under the 'token' key after login; if not present we show a login modal
+// that posts to /api/auth/login (the real sxxysecret endpoint).
+// =====================================================================
+
+function getToken() {
+  // main sxxysecret app saves under 'token'; legacy 'sx_token' is fallback
+  return localStorage.getItem('token') || localStorage.getItem('sx_token') || null;
+}
+function setToken(t) {
+  if (t) {
+    localStorage.setItem('token', t);
+    localStorage.setItem('sx_token', t); // keep legacy key in sync
+  } else {
+    localStorage.removeItem('token');
+    localStorage.removeItem('sx_token');
+  }
+}
+
+let CURRENT_USER = null;
+const PLAYER_ID = 'PENDING'; // will be set after login
+
+// API endpoints (same origin so it works on sxxysecret.com/juego/)
+const API = ''; // empty = same origin
+
+// Send periodic updates while alive
+let reportTimer = null;
+function reportLoopStart() {
+  if (reportTimer) clearInterval(reportTimer);
+  reportTimer = setInterval(reportState, 4000);
+  reportState(); // immediate
+}
+
+async function reportState() {
+  if (dead) return;
+  const token = getToken();
+  if (!token) return;
+  try {
+    const r = await fetch(`${API}/api/juego/score`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer ' + token,
+      },
+      body: JSON.stringify({
+        score, lines, level, tetrises, alive: true,
+        duration: Math.floor((Date.now() - gameStartTime) / 1000),
+      }),
+    });
+    if (r.status === 401) { logout(); return; }
+    if (r.ok) updateConn(true);
+  } catch (e) {
+    updateConn(false);
+  }
+}
+
+async function reportFinalScore() {
+  const token = getToken();
+  if (!token) return false;
+  try {
+    const r = await fetch(`${API}/api/juego/score`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer ' + token,
+      },
+      body: JSON.stringify({
+        score, lines, level, tetrises, alive: false,
+        duration: Math.floor((Date.now() - gameStartTime) / 1000),
+      }),
+    });
+    return r.ok;
+  } catch (e) {
+    return false;
+  }
+}
+
+async function fetchLeaderboard() {
+  try {
+    const r = await fetch(`${API}/api/juego/leaderboard`);
+    if (!r.ok) throw new Error('LB fail');
+    const data = await r.json();
+    renderLeaderboard(data);
+    updateConn(true);
+  } catch (e) {
+    updateConn(false);
+    document.getElementById('lbList').innerHTML =
+      '<li class="lb-empty">⚠ No se pudo conectar al servidor<br><small>El juego funciona offline</small></li>';
+  }
+}
+
+async function fetchMe() {
+  const token = getToken();
+  if (!token) return null;
+  try {
+    // Use /api/auth/me-style endpoint: query /api/profile with the token
+    const r = await fetch(`${API}/api/profile`, {
+      headers: { 'Authorization': 'Bearer ' + token },
+    });
+    if (r.status === 401) { setToken(null); return null; }
+    if (!r.ok) return null;
+    const data = await r.json();
+    // Normalize: sxxysecret returns user fields directly (no .user wrapper)
+    return data && data._id ? data : (data.user || data);
+  } catch (e) {
+    return null;
+  }
+}
+
+async function doLogin(email, password) {
+  try {
+    // Use the real sxxysecret auth endpoint — same one the main app uses
+    const r = await fetch(`${API}/api/auth/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, password }),
+    });
+    const data = await r.json();
+    if (!r.ok) return { ok: false, error: data.message || data.error || 'login failed' };
+    setToken(data.token);
+    CURRENT_USER = data.user;
+    applyUserToUI();
+    return { ok: true, user: data.user };
+  } catch (e) {
+    return { ok: false, error: e.message };
+  }
+}
+
+function logout() {
+  setToken(null);
+  CURRENT_USER = null;
+  showLoginModal();
+}
+
+function applyUserToUI() {
+  if (!CURRENT_USER) {
+    document.getElementById('playerId').textContent = '—';
+    document.title = 'SXXYSECRET // TETRIS BATTLE';
+    return;
+  }
+  document.getElementById('playerId').textContent = CURRENT_USER.name.toUpperCase().slice(0, 14);
+  document.getElementById('playerId').dataset.full = CURRENT_USER.name;
+  document.getElementById('playerId').title = CURRENT_USER.email + ' · role: ' + CURRENT_USER.role;
+  document.title = CURRENT_USER.name + ' · TETRIS BATTLE';
+}
+
+function renderLeaderboard(data) {
+  const players = data.leaderboard || data.players || [];
+  const total = data.total || players.length;
+  document.getElementById('playerCount').textContent = total;
+  document.getElementById('totalPlayers').textContent = total;
+
+  // Find player's rank (by real user id from sxxysecret auth)
+  const sorted = [...players].sort((a, b) => b.bestScore - a.bestScore);
+  const myId = CURRENT_USER ? (CURRENT_USER._id || CURRENT_USER.id) : null;
+  const myIdx = myId ? sorted.findIndex(p => String(p.userId) === String(myId)) : -1;
+  if (myIdx >= 0) {
+    document.getElementById('posNum').textContent = '#' + (myIdx + 1);
+    document.getElementById('posSuf').textContent = ' / ' + total;
+    // Update game-over modal position
+    document.getElementById('deadPos').textContent = '#' + (myIdx + 1) + ' / ' + total;
+  } else {
+    document.getElementById('posNum').textContent = '—';
+    document.getElementById('posSuf').textContent = '';
+  }
+
+  // Top stats
+  if (sorted.length > 0) {
+    document.getElementById('statTop').textContent = sorted[0].bestScore.toLocaleString();
+    const avg = Math.round(sorted.reduce((a, p) => a + p.bestScore, 0) / sorted.length);
+    document.getElementById('statAvg').textContent = avg.toLocaleString();
+  }
+  document.getElementById('statTotal').textContent = total;
+
+  // List
+  const top = sorted.slice(0, 20);
+  const lb = document.getElementById('lbList');
+  if (top.length === 0) {
+    lb.innerHTML = '<li class="lb-empty">Sé el primero en jugar ⚡</li>';
+    return;
+  }
+  lb.innerHTML = top.map((p, i) => {
+    const isMe = myId && String(p.userId) === String(myId);
+    const rank = i + 1;
+    const medal = rank === 1 ? '🥇' : rank === 2 ? '🥈' : rank === 3 ? '🥉' : '#' + rank;
+    const roleTag = (p.role && p.role !== 'member') ? ' <span style="color:#cd7f32;font-size:9px">[' + p.role + ']</span>' : '';
+    const games = p.gamesPlayed > 1 ? ' <span style="color:#888;font-size:8px">×' + p.gamesPlayed + '</span>' : '';
+    const name = escapeHtml(p.name || ('user_' + String(p.userId).slice(-6)));
+    return `<li class="lb-item ${isMe ? 'you' : ''}">
+      <span class="lb-rank">${medal}</span>
+      <span class="lb-name">${name}${roleTag}${games}</span>
+      <span class="lb-score">${p.bestScore.toLocaleString()}</span>
+    </li>`;
+  }).join('');
+}
+
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+function updateConn(ok) {
+  const dot = document.getElementById('connDot');
+  const txt = document.getElementById('connText');
+  if (ok) {
+    dot.style.background = 'var(--green)';
+    dot.style.boxShadow = '0 0 12px var(--green)';
+    txt.textContent = 'ONLINE';
+    txt.style.color = 'var(--green)';
+  } else {
+    dot.style.background = 'var(--red)';
+    dot.style.boxShadow = '0 0 12px var(--red)';
+    txt.textContent = 'OFFLINE';
+    txt.style.color = 'var(--red)';
+  }
+}
+
+// =====================================================================
+// MODAL CONTROLS
+// =====================================================================
+document.getElementById('startBtn').addEventListener('click', startGame);
+document.getElementById('restartBtn').addEventListener('click', restart);
+document.addEventListener('keydown', e => {
+  if (document.getElementById('startModal').style.display !== 'none' &&
+      (e.key === 'Enter' || e.key === ' ')) {
+    startGame();
+    e.preventDefault();
+  }
+});
+
+function startGame() {
+  document.getElementById('startModal').style.display = 'none';
+  resetState();
+  startLoop();
+  // Particle effect
+  for (let i = 0; i < 20; i++) {
+    setTimeout(() => spawnParticle(), i * 40);
+  }
+}
+
+function showLoginModal() {
+  document.getElementById('loginModal').style.display = 'flex';
+  document.getElementById('startModal').style.display = 'none';
+  setTimeout(() => document.getElementById('loginEmail').focus(), 50);
+}
+function hideLoginModal() {
+  document.getElementById('loginModal').style.display = 'none';
+}
+
+// Login form submit
+document.getElementById('loginForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const email = document.getElementById('loginEmail').value.trim();
+  const password = document.getElementById('loginPass').value;
+  const errBox = document.getElementById('loginError');
+  const submit = document.getElementById('loginSubmit');
+  errBox.textContent = '';
+  submit.disabled = true;
+  submit.textContent = '⏳ CONECTANDO...';
+  const result = await doLogin(email, password);
+  submit.disabled = false;
+  submit.textContent = '▶ ENTRAR';
+  if (!result.ok) {
+    errBox.textContent = '⚠ ' + (result.error || 'login failed');
+    return;
+  }
+  hideLoginModal();
+  showToast('✓ Bienvenido ' + result.user.name);
+  // Show the start modal now
+  document.getElementById('startModal').style.display = 'flex';
+  applyUserToUI();
+  // refresh leaderboard with real names
+  fetchLeaderboard();
+});
+
+function spawnParticle() {
+  const p = document.createElement('div');
+  p.className = 'particle';
+  p.style.left = Math.random() * 100 + '%';
+  p.style.top = (50 + Math.random() * 50) + '%';
+  p.style.background = ['#ffaa00', '#0f0', '#00d4ff', '#ff00aa'][Math.floor(Math.random()*4)];
+  document.body.appendChild(p);
+  setTimeout(() => p.remove(), 4000);
+}
+
+// =====================================================================
+// INIT
+// =====================================================================
+async function init() {
+  console.log('[tetris] init start');
+  // Try existing token first
+  let token = getToken();
+  if (token) {
+    const user = await fetchMe();
+    if (user) {
+      CURRENT_USER = user;
+      applyUserToUI();
+      // already logged in → show start modal
+      document.getElementById('startModal').style.display = 'flex';
+      console.log('[tetris] logged in as', user.name);
+    } else {
+      // token invalid
+      setToken(null);
+      showLoginModal();
+    }
+  } else {
+    showLoginModal();
+  }
+  try {
+    await fetchLeaderboard();
+    console.log('[tetris] init leaderboard OK');
+  } catch (e) {
+    console.error('[tetris] init leaderboard ERR', e);
+  }
+  setInterval(fetchLeaderboard, 5000);
+  updateConn(navigator.onLine);
+  window.addEventListener('online', () => { updateConn(true); fetchLeaderboard(); });
+  window.addEventListener('offline', () => updateConn(false));
+  console.log('[tetris] init done');
+}
+try { init(); } catch (e) { console.error('[tetris] init threw', e); }
+</script>
+
+</body>
+</html>
