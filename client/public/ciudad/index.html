@@ -681,6 +681,9 @@ window.addEventListener('load', async () => {
 
   const { token } = await ensureAuth();
   document.body.classList.add('ciudad-ready');
+  // Remove the nuclear inline style so the CSS class selector (body.ciudad-ready #login-bg{display:none!important}) takes effect
+  var lb = document.getElementById('login-bg');
+  if (lb) lb.style.cssText = '';
   client = new CiudadClient(token);
   client.connect();
 });
