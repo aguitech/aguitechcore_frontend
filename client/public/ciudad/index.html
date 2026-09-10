@@ -14,25 +14,29 @@
 
   /* ====== LOGIN OVERLAY ====== */
   #login-bg {
-    position: fixed; inset: 0; background: rgba(0,0,0,0.97);
-    display: flex; align-items: center; justify-content: center;
-    z-index: 100000; backdrop-filter: blur(14px);
+    position: fixed !important; inset: 0 !important;
+    background: rgba(2, 4, 15, 0.99);
+    display: flex !important; align-items: center; justify-content: center;
+    z-index: 999999 !important; backdrop-filter: blur(20px);
+    width: 100vw; height: 100vh; top: 0; left: 0;
   }
-  /* Hide the 3D scene until the user logs in */
-  a-scene, .a-canvas, canvas.a-canvas {
-    z-index: 1 !important;
-  }
-  body.ciudad-ready a-scene,
-  body.ciudad-ready .a-canvas,
-  body.ciudad-ready canvas.a-canvas {
-    z-index: 1 !important;
-    opacity: 1;
-  }
+  /* Hide EVERYTHING that is not the login until user authenticates */
   body:not(.ciudad-ready) a-scene,
   body:not(.ciudad-ready) .a-canvas,
-  body:not(.ciudad-ready) canvas.a-canvas {
+  body:not(.ciudad-ready) canvas.a-canvas,
+  body:not(.ciudad-ready) .controls-panel,
+  body:not(.ciudad-ready) .hud-status,
+  body:not(.ciudad-ready) .hud-info,
+  body:not(.ciudad-ready) .peer-list,
+  body:not(.ciudad-ready) #chat-box,
+  body:not(.ciudad-ready) #chat-input-row {
+    display: none !important;
     visibility: hidden !important;
     opacity: 0 !important;
+    pointer-events: none !important;
+  }
+  body.ciudad-ready #login-bg {
+    display: none !important;
   }
   #login-box {
     background: #0a0e1a; border: 1px solid #00d4ff; border-radius: 14px;
@@ -273,10 +277,10 @@ async function ensureAuth() {
       }
     } catch {}
   }
-  // Show login form
+  // Show login form (it's already visible by default in CSS; just focus the email)
   return new Promise((resolve, reject) => {
-    loginBg.style.display = 'flex';
     setStatus('Ingresa tus credenciales de sxxysecret.com');
+    setTimeout(() => $('login-email').focus(), 100);
 
     loginBtn.onclick = async () => {
       const email = $('login-email').value.trim();
@@ -654,7 +658,6 @@ window.addEventListener('load', async () => {
   requestAnimationFrame(gameLoop);
 
   const { token } = await ensureAuth();
-  loginBg.style.display = 'none';
   document.body.classList.add('ciudad-ready');
   client = new CiudadClient(token);
   client.connect();
