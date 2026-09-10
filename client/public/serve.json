@@ -1,16 +1,26 @@
 {
+  "public": ".",
   "cleanUrls": false,
   "trailingSlash": false,
+  "directoryListing": false,
+  "renderSingle": false,
+  "unlisted": [".*"],
   "rewrites": [
-    { "source": "/ciudad/**", "destination": "/ciudad/index.html" },
     { "source": "/ciudad", "destination": "/ciudad/index.html" },
-    { "source": "/juego/**", "destination": "/juego/index.html" },
+    { "source": "/ciudad/**", "destination": "/ciudad/index.html" },
     { "source": "/juego", "destination": "/juego/index.html" },
-    { "source": "**", "destination": "/index.html" }
+    { "source": "/juego/**", "destination": "/juego/index.html" },
+    { "source": "/", "destination": "/index.html" }
   ],
   "headers": [
     {
-      "source": "**/*.@(html)",
+      "source": "**/*.@(glb|gltf)",
+      "headers": [
+        { "key": "Cache-Control", "value": "public, max-age=31536000, immutable" }
+      ]
+    },
+    {
+      "source": "**/*.@(css|js|html)",
       "headers": [
         { "key": "Cache-Control", "value": "no-cache, no-store, must-revalidate" },
         { "key": "Pragma", "value": "no-cache" },
