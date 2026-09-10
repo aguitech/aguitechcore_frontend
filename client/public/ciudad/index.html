@@ -1086,6 +1086,11 @@ window.addEventListener('load', async () => {
   // Usuario autenticado: ocultar login, mostrar botón logout
   floatingAuth.classList.add('logged-in');
   btnLogout.style.display = 'inline-block';
+  // Empty chat hint al boot
+  const chatBox = $('chat-box');
+  if (chatBox && chatBox.children.length === 0) {
+    chatBox.innerHTML = `<div class="chat-msg"><span style="color:#666;font-style:italic">💬 Aún no hay mensajes. Sé el primero en escribir.</span></div>`;
+  }
   client = new CiudadClient(token);
   client.connect();
 });
