@@ -339,8 +339,8 @@
   <div id="peerItems"></div>
 </div>
 
-<div id="chat-box" style="display:none"></div>
-<div id="chat-input-row" style="display:none">
+<div id="chat-box"></div>
+<div id="chat-input-row">
   <input id="chat-input" placeholder="Escribe un mensaje... (Enter)" maxlength="200" />
   <button id="chat-send">›</button>
 </div>
@@ -793,14 +793,30 @@ function escapeHtml(s) {
 function addChat({ name, text, color, role, system }) {
   const box = $('chat-box'); box.style.display = 'block';
   $('chat-input-row').style.display = 'flex';
-  const div = document.createElement('div');
-  div.className = 'chat-msg';
-  if (system) {
-    div.innerHTML = `<span style="color:${color}">· ${escapeHtml(text)}</span>`;
-  } else {
-    div.innerHTML = `<span class="chat-name" style="color:${color}">${escapeHtml(name)}</span><span class="peer-role">${role !== 'member' ? ' [' + role + ']' : ''}</span>: <span class="chat-text">${escapeHtml(text)}</span>`;
+  // Empty state hint si está vacío
+  if (box.children.length === 0 && !system) {
+    const hint = document.createElement('div');
+    hint.className = 'chat-msg';
+    hint.innerHTML = `<span style="color:#666;font-style:italic">💬 Aún no hay mensajes. Sé el primero en escribir.</span>`;
+    box.appendChild(hint);
   }
-  box.appendChild(div);
+  if (system) {
+    // Remove hint on first system message
+    const hint = box.querySelector('.chat-msg span[style*="italic"]')?.parentElement;
+    if (hint && hint.children.length === 1 && box.children.length === 1) hint.remove();
+    const div = document.createElement('div');
+    div.className = 'chat-msg';
+    div.innerHTML = `<span style="color:${color}">· ${escapeHtml(text)}</span>`;
+    box.appendChild(div);
+  } else {
+    // Remove hint on first user message
+    const hint = box.querySelector('.chat-msg span[style*="italic"]')?.parentElement;
+    if (hint && box.children.length === 1) hint.remove();
+    const div = document.createElement('div');
+    div.className = 'chat-msg';
+    div.innerHTML = `<span class="chat-name" style="color:${color}">${escapeHtml(name)}</span><span class="peer-role">${role !== 'member' ? ' [' + role + ']' : ''}</span>: <span class="chat-text">${escapeHtml(text)}</span>`;
+    box.appendChild(div);
+  }
   box.scrollTop = box.scrollHeight;
   // Trim to last 30
   while (box.children.length > 30) box.removeChild(box.firstChild);
