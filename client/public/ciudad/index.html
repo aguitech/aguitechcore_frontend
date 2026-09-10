@@ -13,13 +13,18 @@
   body { margin: 0; overflow: hidden; font-family: monospace; background: #000; }
 
   /* ====== LOGIN OVERLAY ====== */
+  /* Login panel anclado a la esquina inferior izquierda — el mundo 3D se ve detrás */
   #login-bg {
-    position: fixed !important; inset: 0 !important;
-    background: rgba(2, 4, 15, 0.99);
-    display: flex !important; align-items: center; justify-content: center;
-    z-index: 999999 !important; backdrop-filter: blur(20px);
-    width: 100vw; height: 100vh; top: 0; left: 0;
+    position: fixed !important;
+    bottom: 20px; left: 20px;
+    background: transparent;
+    display: flex !important; align-items: flex-end; justify-content: flex-start;
+    z-index: 999999 !important;
+    padding: 0;
+    width: auto; height: auto; top: auto; right: auto;
+    pointer-events: none; /* permite ver/interactuar con la escena detrás */
   }
+  #login-bg > * { pointer-events: auto; } /* el panel sí captura clicks */
   /* Hide EVERYTHING that is not the login until user authenticates */
   body:not(.ciudad-ready) a-scene,
   body:not(.ciudad-ready) .a-canvas,
