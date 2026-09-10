@@ -377,6 +377,7 @@ function getToken() {
   return localStorage.getItem('token') || localStorage.getItem('sx_token') || null;
 }
 
+
 const $ = (id) => document.getElementById(id);
 
 const loginBg   = $('login-bg');
@@ -384,13 +385,14 @@ const loginErr  = $('login-error');
 const loginStat = $('login-status');
 const loginBtn  = $('login-btn');
 
+
 function setStatus(msg, color = '#888') {
   loginStat.textContent = msg;
   loginStat.style.color = color;
 }
 
 async function ensureAuth() {
-  let token = getToken();
+    let token = getToken();
   if (token) {
     setStatus('Token detectado — verificando...', '#00d4ff');
     try {
@@ -408,7 +410,7 @@ async function ensureAuth() {
     setStatus('Ingresa tus credenciales de sxxysecret.com');
     setTimeout(() => $('login-email').focus(), 100);
 
-    loginBtn.onclick = async () => {
+        loginBtn.onclick = async () => {
       const email = $('login-email').value.trim();
       const password = $('login-password').value;
       if (!email || !password) {
@@ -749,20 +751,37 @@ function addChat({ name, text, color, role, system }) {
 // =====================================================================
 // DM MODAL — event bindings (close, send, Enter, open full chat link)
 // =====================================================================
-$('dm-close').addEventListener('click', closeDmModal);
-$('dm-send').addEventListener('click', sendDm);
-$('dm-input').addEventListener('keydown', (e) => {
-  if (e.key === 'Enter' && !e.shiftKey) {
-    e.preventDefault();
-    sendDm();
-  } else if (e.key === 'Escape') {
-    closeDmModal();
+// Safe element lookup (returns null if missing, never throws)
+function safeBind(id, event, fn) {
+  const el = document.getElementById(id);
+  if (el) el.addEventListener(event, fn);
+  return el;
+}
+
+// Defer DM modal bindings until DOM is fully ready (A-Frame injects elements after script parse)
+function bindDmEvents() {
+  safeBind('dm-close', 'click', closeDmModal);
+  safeBind('dm-send', 'click', sendDm);
+  const dmInput = document.getElementById('dm-input');
+  if (dmInput) {
+    dmInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        sendDm();
+      } else if (e.key === 'Escape') {
+        closeDmModal();
+      }
+    });
   }
-});
-$('dm-modal-bg').addEventListener('click', (e) => {
-  // Click on backdrop (not on the modal itself) closes
-  if (e.target.id === 'dm-modal-bg') closeDmModal();
-});
+  safeBind('dm-modal-bg', 'click', (e) => {
+    if (e.target.id === 'dm-modal-bg') closeDmModal();
+  });
+}
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', bindDmEvents);
+} else {
+  bindDmEvents();
+}
 
 async function openFullChat(e) {
   e.preventDefault();
@@ -798,7 +817,7 @@ async function openFullChat(e) {
     }, 2500);
   }
 }
-$('dm-open-full').addEventListener('click', openFullChat);
+safeBind('dm-open-full', 'click', openFullChat);
 
 
 // LOCAL PLAYER CONTROLS (re-used logic from your original code)
