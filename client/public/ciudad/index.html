@@ -48,13 +48,22 @@
     opacity: 0 !important;
     pointer-events: none !important;
   }
-  /* Botones flotantes SIEMPRE visibles (logout/login/registro), encima del mundo 3D */
+  /* ====== AUTH PILL (bottom-left, siempre visible) ====== */
+  /* Cuando NO autenticado: muestra botones Login + Registro */
+  /* Cuando autenticado: muestra [👤 Nombre · role] + Cerrar Sesión */
   #floating-auth {
     position: fixed !important;
-    top: 20px; left: 20px;
+    bottom: 20px; left: 20px;
     z-index: 1000001 !important;
-    display: flex !important; gap: 8px;
+    display: flex !important; align-items: center; gap: 10px;
     pointer-events: auto !important;
+    background: rgba(0,0,0,0.85);
+    border: 1px solid #00d4ff44;
+    border-radius: 10px;
+    padding: 10px 14px;
+    backdrop-filter: blur(8px);
+    font-family: monospace;
+    max-width: 90vw;
   }
   #floating-auth button {
     pointer-events: auto !important;
@@ -68,9 +77,34 @@
     background: #00d4ff; color: #0a0e1a;
     box-shadow: 0 0 20px rgba(0,212,255,0.6);
   }
-  /* Cuando está autenticado, el botón "Cerrar Sesión" debe seguir visible */
+  /* Nombre + role del usuario autenticado */
+  #auth-user-info {
+    display: none;
+    align-items: center; gap: 8px;
+    color: #00d4ff; font-size: 13px;
+    padding: 4px 10px;
+    border-right: 1px solid #00d4ff44;
+  }
+  #auth-user-info .auth-avatar {
+    width: 28px; height: 28px; border-radius: 50%;
+    background: linear-gradient(135deg, #00d4ff 0%, #0066ff 100%);
+    color: #000; display: flex; align-items: center; justify-content: center;
+    font-weight: 700; font-size: 14px;
+  }
+  #auth-user-info .auth-name {
+    font-weight: 700; color: #fff;
+  }
+  #auth-user-info .auth-role {
+    font-size: 10px; color: #888; text-transform: uppercase;
+    padding: 2px 6px; border: 1px solid #00d4ff44; border-radius: 4px;
+  }
+  /* Cuando NO autenticado: ocultar user-info */
+  #floating-auth:not(.logged-in) #auth-user-info { display: none !important; }
+  /* Cuando autenticado: ocultar login/register, mostrar user-info + logout */
   #floating-auth.logged-in #btn-show-login { display: none; }
   #floating-auth.logged-in #btn-show-register { display: none; }
+  #floating-auth.logged-in #auth-user-info { display: flex !important; }
+  #floating-auth.logged-in #btn-logout { display: inline-flex !important; align-items: center; gap: 4px; }
   body.ciudad-ready #login-bg {
     display: none !important;
   }
@@ -352,10 +386,20 @@
   <p style="color: #888; font-size: 10px;">🌐 Multiusuario en tiempo real — todos ven a todos</p>
 </div>
 
-<!-- ============== FLOATING AUTH BUTTONS (always visible) ============== -->
+<!-- ============== AUTH PILL (bottom-left, always visible) ============== -->
 <div id="floating-auth">
+  <!-- Visible solo cuando NO está autenticado -->
   <button id="btn-show-login" title="Iniciar Sesión">🔑 Login</button>
   <button id="btn-show-register" title="Crear cuenta nueva">📝 Registro</button>
+
+  <!-- Visible solo cuando SÍ está autenticado -->
+  <div id="auth-user-info">
+    <div class="auth-avatar" id="auth-avatar-letter">?</div>
+    <div style="display:flex; flex-direction:column; gap:2px;">
+      <span class="auth-name" id="auth-user-name">Usuario</span>
+      <span class="auth-role" id="auth-user-role">user</span>
+    </div>
+  </div>
   <button id="btn-logout" title="Cerrar Sesión" style="display:none;">🚪 Cerrar Sesión</button>
 </div>
 
@@ -452,6 +496,21 @@ function getToken() {
   return localStorage.getItem('token') || localStorage.getItem('sx_token') || null;
 }
 
+function getStoredUser() {
+  try {
+    const raw = localStorage.getItem('ciudad_user');
+    return raw ? JSON.parse(raw) : null;
+  } catch { return null; }
+}
+
+function storeUser(user) {
+  if (user) localStorage.setItem('ciudad_user', JSON.stringify(user));
+}
+
+function clearStoredUser() {
+  localStorage.removeItem('ciudad_user');
+}
+
 
 const $ = (id) => document.getElementById(id);
 
@@ -476,6 +535,7 @@ async function ensureAuth() {
       if (r.ok) {
         const data = await r.json();
         const user = data.user || data;
+        storeUser(user); // guardar para el pill del bottom
         setStatus(`✓ Hola, ${user.name}. Entrando...`, '#00ff88');
         return { token, user };
       }
@@ -517,6 +577,7 @@ async function ensureAuth() {
           return;
         }
         localStorage.setItem('token', data.token);
+        storeUser(data.user); // guardar para el pill del bottom
         setStatus(`✓ Hola, ${data.user.name}. Conectando...`, '#00ff88');
         resolve({ token: data.token, user: data.user });
       } catch (e) {
@@ -1059,6 +1120,29 @@ function gameLoop(now) {
 }
 
 // =====================================================================
+// AUTH PILL — populate user info in the bottom-left pill
+// =====================================================================
+const authUserInfo   = $('auth-user-info');
+const authAvatar     = $('auth-avatar-letter');
+const authName       = $('auth-user-name');
+const authRole       = $('auth-user-role');
+
+function populateAuthPill(user) {
+  if (!user) return;
+  const name = user.name || user.email || 'Usuario';
+  const role = user.role || 'user';
+  authName.textContent = name;
+  authRole.textContent = role;
+  // Primera letra del nombre (o del email) como avatar
+  const letter = (name.trim()[0] || '?').toUpperCase();
+  authAvatar.textContent = letter;
+}
+
+// Al cargar la página, si hay user guardado, popular el pill de inmediato
+const storedUser = getStoredUser();
+if (storedUser) populateAuthPill(storedUser);
+
+// =====================================================================
 // FLOATING AUTH BUTTONS (always visible, encima del mundo 3D)
 // =====================================================================
 const floatingAuth = $('floating-auth');
@@ -1090,9 +1174,22 @@ function showRegister() {
   floatingAuth.classList.remove('logged-in');
 }
 function doLogout() {
+  // Limpiar TODOS los tokens y datos de usuario
+  localStorage.removeItem('token');
+  localStorage.removeItem('sx_token');
   localStorage.removeItem('ciudad_token');
   localStorage.removeItem('ciudad_user');
-  location.reload();
+  // Volver al estado de login (sin recargar — más rápido)
+  document.body.classList.remove('ciudad-ready');
+  loginBg.style.display = 'flex';
+  // Resetear form a modo login
+  showLogin();
+  // Limpiar errores/status
+  loginErr.textContent = '';
+  setStatus('Sesión cerrada — ingresa tus credenciales');
+  // Cerrar conexión WebSocket si existe
+  try { if (client && client.ws) client.ws.close(); } catch {}
+  client = null;
 }
 btnShowLogin.addEventListener('click', showLogin);
 btnShowRegister.addEventListener('click', showRegister);
@@ -1136,11 +1233,13 @@ window.addEventListener('load', async () => {
     }, 15000);
   }
 
-  const { token } = await ensureAuth();
+  const { token, user } = await ensureAuth();
   document.body.classList.add('ciudad-ready');
-  // Usuario autenticado: ocultar login, mostrar botón logout
+  // Usuario autenticado: ocultar login, mostrar pill con nombre + logout
   floatingAuth.classList.add('logged-in');
-  btnLogout.style.display = 'inline-block';
+  btnLogout.style.display = 'inline-flex';
+  // Popular el pill con la info del usuario (de ensureAuth o de localStorage)
+  populateAuthPill(user || getStoredUser());
   // Empty chat hint al boot
   const chatBox = $('chat-box');
   if (chatBox && chatBox.children.length === 0) {
