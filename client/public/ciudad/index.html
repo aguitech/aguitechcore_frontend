@@ -173,6 +173,7 @@
   <span class="conn-dot" id="connDot"></span>
   <span id="connText">DESCONECTADO</span><br>
   🎬 <span id="currentAnim">CARGANDO...</span>
+  <br><button id="logoutBtn" style="margin-top:8px;background:#0a0e1a;color:#ff3838;border:1px solid #ff383844;padding:4px 10px;border-radius:5px;font-family:monospace;font-size:10px;cursor:pointer;">⏻ SALIR</button>
 </div>
 
 <div class="hud-info">
@@ -277,6 +278,32 @@ function getToken() {
   return localStorage.getItem('token') || localStorage.getItem('sx_token') || null;
 }
 
+// Decode JWT payload without verifying signature (just to read `exp`)
+function decodeJwtPayload(token) {
+  try {
+    const part = token.split('.')[1];
+    if (!part) return null;
+    // base64url → base64
+    const b64 = part.replace(/-/g, '+').replace(/_/g, '/');
+    const json = atob(b64);
+    return JSON.parse(json);
+  } catch { return null; }
+}
+
+// True if token is missing, malformed, or expired
+function tokenIsStale(token) {
+  if (!token) return true;
+  const p = decodeJwtPayload(token);
+  if (!p || typeof p.exp !== 'number') return true;
+  // exp is in seconds, Date.now() in ms; treat as stale if <30s remaining
+  return (p.exp * 1000) < (Date.now() + 30000);
+}
+
+function clearSession() {
+  try { localStorage.removeItem('token'); } catch {}
+  try { localStorage.removeItem('sx_token'); } catch {}
+}
+
 const $ = (id) => document.getElementById(id);
 
 const loginBg   = $('login-bg');
@@ -291,6 +318,11 @@ function setStatus(msg, color = '#888') {
 
 async function ensureAuth() {
   let token = getToken();
+  // First line of defense: discard stale/expired tokens locally so we ALWAYS show the login
+  if (token && tokenIsStale(token)) {
+    clearSession();
+    token = null;
+  }
   if (token) {
     setStatus('Token detectado — verificando...', '#00d4ff');
     try {
@@ -300,6 +332,11 @@ async function ensureAuth() {
         const user = data.user || data;
         setStatus(`✓ Hola, ${user.name}. Entrando...`, '#00ff88');
         return { token, user };
+      }
+      // 401/403: token rejected by server — wipe it and fall through to login
+      if (r.status === 401 || r.status === 403) {
+        clearSession();
+        token = null;
       }
     } catch {}
   }
@@ -690,6 +727,21 @@ window.addEventListener('load', async () => {
   if (lb) lb.style.cssText = '';
   client = new CiudadClient(token);
   client.connect();
+
+  // If WebSocket fails to open within 5s, the token is invalid — bounce back to login
+  setTimeout(() => {
+    if (!client || !client.ws || client.ws.readyState !== 1) {
+      console.warn('[ciudad] WebSocket no se abrió — token probablemente inválido');
+      setStatus('Conexión fallida — vuelve a iniciar sesión', '#ff3838');
+    }
+  }, 5000);
+
+  // Logout button: clear session and reload to show the login form
+  var lbBtn = document.getElementById('logoutBtn');
+  if (lbBtn) lbBtn.onclick = function() {
+    clearSession();
+    location.reload();
+  };
 });
 </script>
 
