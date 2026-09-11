@@ -25,14 +25,6 @@
     pointer-events: none; /* permite ver/interactuar con la escena detrás */
   }
   #login-bg > * { pointer-events: auto; } /* el panel sí captura clicks */
-  /* El mundo 3D (a-scene + canvas) debe estar siempre DEBAJO del login */
-  a-scene, .a-scene, .a-canvas, canvas.a-canvas {
-    position: fixed !important;
-    top: 0; left: 0;
-    width: 100% !important; height: 100% !important;
-    z-index: 1 !important;
-    pointer-events: auto;
-  }
   /* Hide EVERYTHING that is not the login until user authenticates */
   body:not(.ciudad-ready) a-scene,
   body:not(.ciudad-ready) .a-canvas,
@@ -48,63 +40,6 @@
     opacity: 0 !important;
     pointer-events: none !important;
   }
-  /* ====== AUTH PILL (bottom-left, siempre visible) ====== */
-  /* Cuando NO autenticado: muestra botones Login + Registro */
-  /* Cuando autenticado: muestra [👤 Nombre · role] + Cerrar Sesión */
-  #floating-auth {
-    position: fixed !important;
-    bottom: 20px; left: 20px;
-    z-index: 1000001 !important;
-    display: flex !important; align-items: center; gap: 10px;
-    pointer-events: auto !important;
-    background: rgba(0,0,0,0.85);
-    border: 1px solid #00d4ff44;
-    border-radius: 10px;
-    padding: 10px 14px;
-    backdrop-filter: blur(8px);
-    font-family: monospace;
-    max-width: 90vw;
-  }
-  #floating-auth button {
-    pointer-events: auto !important;
-    cursor: pointer;
-    background: #0a0e1a; color: #00d4ff;
-    border: 1px solid #00d4ff; border-radius: 8px;
-    padding: 8px 14px; font-family: monospace; font-size: 13px;
-    transition: all 0.2s;
-  }
-  #floating-auth button:hover {
-    background: #00d4ff; color: #0a0e1a;
-    box-shadow: 0 0 20px rgba(0,212,255,0.6);
-  }
-  /* Nombre + role del usuario autenticado */
-  #auth-user-info {
-    display: none;
-    align-items: center; gap: 8px;
-    color: #00d4ff; font-size: 13px;
-    padding: 4px 10px;
-    border-right: 1px solid #00d4ff44;
-  }
-  #auth-user-info .auth-avatar {
-    width: 28px; height: 28px; border-radius: 50%;
-    background: linear-gradient(135deg, #00d4ff 0%, #0066ff 100%);
-    color: #000; display: flex; align-items: center; justify-content: center;
-    font-weight: 700; font-size: 14px;
-  }
-  #auth-user-info .auth-name {
-    font-weight: 700; color: #fff;
-  }
-  #auth-user-info .auth-role {
-    font-size: 10px; color: #888; text-transform: uppercase;
-    padding: 2px 6px; border: 1px solid #00d4ff44; border-radius: 4px;
-  }
-  /* Cuando NO autenticado: ocultar user-info */
-  #floating-auth:not(.logged-in) #auth-user-info { display: none !important; }
-  /* Cuando autenticado: ocultar login/register, mostrar user-info + logout */
-  #floating-auth.logged-in #btn-show-login { display: none; }
-  #floating-auth.logged-in #btn-show-register { display: none; }
-  #floating-auth.logged-in #auth-user-info { display: flex !important; }
-  #floating-auth.logged-in #btn-logout { display: inline-flex !important; align-items: center; gap: 4px; }
   body.ciudad-ready #login-bg {
     display: none !important;
   }
@@ -339,18 +274,11 @@
 <!-- ============== LOGIN ============== -->
 <div id="login-bg">
   <div id="login-box">
-    <h1 id="login-title">🌆 SXXYSECRET // CIUDAD 3D</h1>
-    <p id="login-subtitle">Para entrar al mundo multijugador, inicia sesión con tu cuenta de sxxysecret.com</p>
-    <input type="hidden" id="login-mode" value="login" />
-    <div id="name-row" style="display:none;">
-      <input id="login-name" type="text" placeholder="Tu nombre" autocomplete="name" />
-    </div>
+    <h1>🌆 SXXYSECRET // CIUDAD 3D</h1>
+    <p>Para entrar al mundo multijugador, inicia sesión con tu cuenta de sxxysecret.com</p>
     <input id="login-email" type="email" placeholder="email@dominio.com" autocomplete="username" />
     <input id="login-password" type="password" placeholder="contraseña" autocomplete="current-password" />
-    <div id="register-fields" style="display:none;">
-      <input id="login-phone" type="tel" placeholder="teléfono (10 dígitos)" autocomplete="tel" />
-    </div>
-    <button id="login-btn-submit">ENTRAR</button>
+    <button id="login-btn">ENTRAR</button>
     <div id="login-error"></div>
     <div id="login-status"></div>
   </div>
@@ -373,8 +301,8 @@
   <div id="peerItems"></div>
 </div>
 
-<div id="chat-box"></div>
-<div id="chat-input-row">
+<div id="chat-box" style="display:none"></div>
+<div id="chat-input-row" style="display:none">
   <input id="chat-input" placeholder="Escribe un mensaje... (Enter)" maxlength="200" />
   <button id="chat-send">›</button>
 </div>
@@ -386,30 +314,8 @@
   <p style="color: #888; font-size: 10px;">🌐 Multiusuario en tiempo real — todos ven a todos</p>
 </div>
 
-<!-- ============== AUTH PILL (bottom-left, always visible) ============== -->
-<div id="floating-auth">
-  <!-- Visible solo cuando NO está autenticado -->
-  <button id="btn-show-login" title="Iniciar Sesión">🔑 Login</button>
-  <button id="btn-show-register" title="Crear cuenta nueva">📝 Registro</button>
-
-  <!-- Visible solo cuando SÍ está autenticado -->
-  <div id="auth-user-info">
-    <div class="auth-avatar" id="auth-avatar-letter">?</div>
-    <div style="display:flex; flex-direction:column; gap:2px;">
-      <span class="auth-name" id="auth-user-name">Usuario</span>
-      <span class="auth-role" id="auth-user-role">user</span>
-    </div>
-  </div>
-  <button id="btn-logout" title="Cerrar Sesión" style="display:none;">🚪 Cerrar Sesión</button>
-</div>
-
 <!-- ============== A-FRAME SCENE ============== -->
 <a-scene background="color:#82c8e5" stats="false" renderer="antialias:true; alpha:false" network>
-
-  <!-- ====== ASSETS (GLB models) ====== -->
-  <a-assets>
-    <a-asset-item id="plaza2Model" src="/ciudad/assets/plaza2.glb"></a-asset-item>
-  </a-assets>
 
   <a-entity light="type:ambient; intensity:0.6"></a-entity>
   <a-entity light="type:directional; intensity:1.2" position="5 10 3"></a-entity>
@@ -437,26 +343,6 @@
 
     <!-- Vertical billboard / video screen (will show your video if uploaded) -->
     <a-box position="10 4 0" width="4" height="8" depth="0.5" color="#111"></a-box>
-
-    <!-- ====== PLAZA 3D (GLB asset) ====== -->
-    <!-- plaza2.glb cargado en el centro de la ciudad (spawn del player) -->
-    <a-entity id="plaza"
-              gltf-model="#plaza2Model"
-              position="0 0 -25"
-              rotation="0 0 0"
-              scale="1 1 1"
-              shadow="cast:true; receive:true"
-              data-model-loaded="false">
-      <!-- Spinning indicator mientras carga -->
-      <a-entity id="plaza-loader"
-                geometry="primitive:torus; radius:1.2; tube:0.05; segments:32"
-                material="color:#00d4ff; emissive:#00d4ff; emissiveIntensity:0.6; metalness:0.3"
-                position="0 3 0"
-                animation="property:rotation.y; to:360; dur:2000; loop:true; easing:linear">
-      </a-entity>
-      <a-text value="🏛️ Cargando plaza2.glb..."
-              position="0 2 0" align="center" color="#00d4ff" width="6"></a-text>
-    </a-entity>
   </a-entity>
 
   <!-- ====== CAMERA RIG ====== -->
@@ -496,29 +382,13 @@ function getToken() {
   return localStorage.getItem('token') || localStorage.getItem('sx_token') || null;
 }
 
-function getStoredUser() {
-  try {
-    const raw = localStorage.getItem('ciudad_user');
-    return raw ? JSON.parse(raw) : null;
-  } catch { return null; }
-}
-
-function storeUser(user) {
-  if (user) localStorage.setItem('ciudad_user', JSON.stringify(user));
-}
-
-function clearStoredUser() {
-  localStorage.removeItem('ciudad_user');
-}
-
 
 const $ = (id) => document.getElementById(id);
 
 const loginBg   = $('login-bg');
 const loginErr  = $('login-error');
 const loginStat = $('login-status');
-const loginBtn  = $('login-btn-submit');
-const loginBox  = $('login-box');
+const loginBtn  = $('login-btn');
 
 
 function setStatus(msg, color = '#888') {
@@ -535,7 +405,6 @@ async function ensureAuth() {
       if (r.ok) {
         const data = await r.json();
         const user = data.user || data;
-        storeUser(user); // guardar para el pill del bottom
         setStatus(`✓ Hola, ${user.name}. Entrando...`, '#00ff88');
         return { token, user };
       }
@@ -546,8 +415,7 @@ async function ensureAuth() {
     setStatus('Ingresa tus credenciales de sxxysecret.com');
     setTimeout(() => $('login-email').focus(), 100);
 
-    loginBtn.onclick = async () => {
-      const mode = $('login-mode').value; // 'login' or 'register'
+        loginBtn.onclick = async () => {
       const email = $('login-email').value.trim();
       const password = $('login-password').value;
       if (!email || !password) {
@@ -555,29 +423,20 @@ async function ensureAuth() {
         return;
       }
       loginErr.textContent = '';
-      setStatus(mode === 'register' ? 'Creando cuenta...' : 'Autenticando...', '#00d4ff');
+      setStatus('Autenticando...', '#00d4ff');
       try {
-        const endpoint = mode === 'register' ? '/api/auth/register' : '/api/auth/login';
-        const body = mode === 'register'
-          ? {
-              email, password,
-              name: ($('login-name')?.value || email.split('@')[0]).trim(),
-              phone: ($('login-phone')?.value || '').trim()
-            }
-          : { email, password };
-        const r = await fetch(endpoint, {
+        const r = await fetch('/api/auth/login', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(body),
+          body: JSON.stringify({ email, password }),
         });
         const data = await r.json();
         if (!r.ok) {
-          loginErr.textContent = data.message || data.error || 'Error';
+          loginErr.textContent = data.message || data.error || 'Login inválido';
           setStatus('');
           return;
         }
         localStorage.setItem('token', data.token);
-        storeUser(data.user); // guardar para el pill del bottom
         setStatus(`✓ Hola, ${data.user.name}. Conectando...`, '#00ff88');
         resolve({ token: data.token, user: data.user });
       } catch (e) {
@@ -879,32 +738,14 @@ function escapeHtml(s) {
 function addChat({ name, text, color, role, system }) {
   const box = $('chat-box'); box.style.display = 'block';
   $('chat-input-row').style.display = 'flex';
-  // Si system es string, ese es el texto del sistema
-  if (typeof system === 'string') text = system;
-  // Empty state hint si está vacío
-  if (box.children.length === 0 && !system) {
-    const hint = document.createElement('div');
-    hint.className = 'chat-msg';
-    hint.innerHTML = `<span style="color:#666;font-style:italic">💬 Aún no hay mensajes. Sé el primero en escribir.</span>`;
-    box.appendChild(hint);
-  }
+  const div = document.createElement('div');
+  div.className = 'chat-msg';
   if (system) {
-    // Remove hint on first system message
-    const hint = box.querySelector('.chat-msg span[style*="italic"]')?.parentElement;
-    if (hint && hint.children.length === 1 && box.children.length === 1) hint.remove();
-    const div = document.createElement('div');
-    div.className = 'chat-msg';
-    div.innerHTML = `<span style="color:${color}">· ${escapeHtml(text || '')}</span>`;
-    box.appendChild(div);
+    div.innerHTML = `<span style="color:${color}">· ${escapeHtml(text)}</span>`;
   } else {
-    // Remove hint on first user message
-    const hint = box.querySelector('.chat-msg span[style*="italic"]')?.parentElement;
-    if (hint && box.children.length === 1) hint.remove();
-    const div = document.createElement('div');
-    div.className = 'chat-msg';
     div.innerHTML = `<span class="chat-name" style="color:${color}">${escapeHtml(name)}</span><span class="peer-role">${role !== 'member' ? ' [' + role + ']' : ''}</span>: <span class="chat-text">${escapeHtml(text)}</span>`;
-    box.appendChild(div);
   }
+  box.appendChild(div);
   box.scrollTop = box.scrollHeight;
   // Trim to last 30
   while (box.children.length > 30) box.removeChild(box.firstChild);
@@ -1120,82 +961,6 @@ function gameLoop(now) {
 }
 
 // =====================================================================
-// AUTH PILL — populate user info in the bottom-left pill
-// =====================================================================
-const authUserInfo   = $('auth-user-info');
-const authAvatar     = $('auth-avatar-letter');
-const authName       = $('auth-user-name');
-const authRole       = $('auth-user-role');
-
-function populateAuthPill(user) {
-  if (!user) return;
-  const name = user.name || user.email || 'Usuario';
-  const role = user.role || 'user';
-  authName.textContent = name;
-  authRole.textContent = role;
-  // Primera letra del nombre (o del email) como avatar
-  const letter = (name.trim()[0] || '?').toUpperCase();
-  authAvatar.textContent = letter;
-}
-
-// Al cargar la página, si hay user guardado, popular el pill de inmediato
-const storedUser = getStoredUser();
-if (storedUser) populateAuthPill(storedUser);
-
-// =====================================================================
-// FLOATING AUTH BUTTONS (always visible, encima del mundo 3D)
-// =====================================================================
-const floatingAuth = $('floating-auth');
-const btnShowLogin = $('btn-show-login');
-const btnShowRegister = $('btn-show-register');
-const btnLogout = $('btn-logout');
-
-function showLogin() {
-  document.body.classList.remove('ciudad-ready');
-  loginBg.style.display = 'flex';
-  // Volver a modo login: mostrar campos de login, ocultar registro
-  loginBox.querySelector('#login-title').textContent = '🌆 SXXYSECRET // CIUDAD 3D';
-  loginBox.querySelector('#login-subtitle').textContent = 'Inicia sesión para entrar al mundo 3D multiusuario';
-  loginBox.querySelector('#login-btn-submit').textContent = 'ENTRAR';
-  loginBox.querySelector('#login-mode').value = 'login';
-  loginBox.querySelector('#register-fields').style.display = 'none';
-  loginBox.querySelector('#name-row').style.display = 'none';
-  floatingAuth.classList.remove('logged-in');
-}
-function showRegister() {
-  document.body.classList.remove('ciudad-ready');
-  loginBg.style.display = 'flex';
-  loginBox.querySelector('#login-title').textContent = '📝 CREAR CUENTA';
-  loginBox.querySelector('#login-subtitle').textContent = 'Regístrate para acceder al mundo 3D';
-  loginBox.querySelector('#login-btn-submit').textContent = 'CREAR CUENTA';
-  loginBox.querySelector('#login-mode').value = 'register';
-  loginBox.querySelector('#register-fields').style.display = 'block';
-  loginBox.querySelector('#name-row').style.display = 'block';
-  floatingAuth.classList.remove('logged-in');
-}
-function doLogout() {
-  // Limpiar TODOS los tokens y datos de usuario
-  localStorage.removeItem('token');
-  localStorage.removeItem('sx_token');
-  localStorage.removeItem('ciudad_token');
-  localStorage.removeItem('ciudad_user');
-  // Volver al estado de login (sin recargar — más rápido)
-  document.body.classList.remove('ciudad-ready');
-  loginBg.style.display = 'flex';
-  // Resetear form a modo login
-  showLogin();
-  // Limpiar errores/status
-  loginErr.textContent = '';
-  setStatus('Sesión cerrada — ingresa tus credenciales');
-  // Cerrar conexión WebSocket si existe
-  try { if (client && client.ws) client.ws.close(); } catch {}
-  client = null;
-}
-btnShowLogin.addEventListener('click', showLogin);
-btnShowRegister.addEventListener('click', showRegister);
-btnLogout.addEventListener('click', doLogout);
-
-// =====================================================================
 // BOOT
 // =====================================================================
 let client = null;
@@ -1203,48 +968,8 @@ window.addEventListener('load', async () => {
   setInputs();
   requestAnimationFrame(gameLoop);
 
-  // ====================================================================
-  // PLAZA 3D GLB — Hide loader spinner when model finishes loading
-  // ====================================================================
-  const plaza = document.querySelector('#plaza');
-  const plazaLoader = document.querySelector('#plaza-loader');
-  const plazaText = plaza ? plaza.querySelector('a-text') : null;
-  if (plaza) {
-    plaza.addEventListener('model-loaded', () => {
-      console.log('[ciudad-plaza] plaza2.glb loaded ✓');
-      plaza.setAttribute('data-model-loaded', 'true');
-      // Ocultar loader
-      if (plazaLoader) plazaLoader.parentNode.removeChild(plazaLoader);
-      if (plazaText) plazaText.parentNode.removeChild(plazaText);
-      // Log de bounds para saber el tamaño real del modelo
-      try {
-        const obj = plaza.object3D;
-        const box = new THREE.Box3().setFromObject(obj);
-        const size = box.getSize(new THREE.Vector3());
-        console.log(`[ciudad-plaza] modelo bounds: ${size.x.toFixed(1)}×${size.y.toFixed(1)}×${size.z.toFixed(1)}`);
-      } catch(e) { console.warn('bounds error', e); }
-    });
-    // Timeout fallback: si no carga en 15s, mostrar error
-    setTimeout(() => {
-      if (plaza.getAttribute('data-model-loaded') === 'false') {
-        console.warn('[ciudad-plaza] plaza2.glb no cargó en 15s');
-        if (plazaText) plazaText.setAttribute('value', '⚠️ Error cargando plaza2.glb');
-      }
-    }, 15000);
-  }
-
-  const { token, user } = await ensureAuth();
+  const { token } = await ensureAuth();
   document.body.classList.add('ciudad-ready');
-  // Usuario autenticado: ocultar login, mostrar pill con nombre + logout
-  floatingAuth.classList.add('logged-in');
-  btnLogout.style.display = 'inline-flex';
-  // Popular el pill con la info del usuario (de ensureAuth o de localStorage)
-  populateAuthPill(user || getStoredUser());
-  // Empty chat hint al boot
-  const chatBox = $('chat-box');
-  if (chatBox && chatBox.children.length === 0) {
-    chatBox.innerHTML = `<div class="chat-msg"><span style="color:#666;font-style:italic">💬 Aún no hay mensajes. Sé el primero en escribir.</span></div>`;
-  }
   client = new CiudadClient(token);
   client.connect();
 });
