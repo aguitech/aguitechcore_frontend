@@ -10,6 +10,9 @@
     { "source": "/ciudad/**", "destination": "/ciudad/index.html" },
     { "source": "/juego", "destination": "/juego/index.html" },
     { "source": "/juego/**", "destination": "/juego/index.html" },
+    { "source": "/public/blog", "destination": "/index.html" },
+    { "source": "/public/blog/", "destination": "/index.html" },
+    { "source": "/public/blog/**", "destination": "/index.html" },
     { "source": "/", "destination": "/index.html" }
   ],
   "headers": [
